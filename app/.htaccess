@@ -1,0 +1,32 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Engros Bestillingsportal — webserver-sikkerhed
+# Blokerer direkte download af følsomme filer. PHP-filer afvikles som normalt.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Beskyt database, cache, logs, config og miljøfiler mod direkte adgang via browser.
+<FilesMatch "\.(db|db-journal|db-wal|sqlite|sqlite3|json|log|ini|env)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Skjul .htaccess selv og evt. skjulte filer
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Vis ikke mappeindhold, hvis der ikke er en index-fil
+Options -Indexes
+
+# Sørg for at index.php er standardsiden
+DirectoryIndex index.php

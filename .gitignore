@@ -1,0 +1,20 @@
+.env
+bc_config.json
+*.db
+*.db-journal
+*.db-wal
+token_cache.json
+dns_cache.json
+app/katalog_cache.json
+app/items_cache.json
+app/variants_cache.json
+app/units_cache.json
+app/item_units_cache.json
+app/php_errors.log
+app/php.ini
+*.log
+
+# Backup- og arbejdsmapper hører ikke i repoet
+backup/
+scratch/
+.ftp-deploy-sync-state.json
