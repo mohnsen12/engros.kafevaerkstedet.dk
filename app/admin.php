@@ -148,11 +148,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $succes_besked = "Kodeordet for '$username' blev nulstillet. Udlever det nye kodeord til forhandleren.";
             }
         }
+        // ─── Handling: REDIGER FORHANDLER ────────────────────────────────────
+        elseif ($action === 'rediger_bruger') {
+            $bruger_id   = intval($_POST['bruger_id'] ?? 0);
+            $brugernavn  = trim($_POST['brugernavn'] ?? '');
+            $bc_kunde_nr = trim($_POST['bc_kunde_nr'] ?? '');
+
+            $stmt = $db->prepare("SELECT brugernavn FROM brugere WHERE id = :id");
+            $stmt->execute([':id' => $bruger_id]);
+            $eksisterende = $stmt->fetchColumn();
+
+            if (!$eksisterende) {
+                $fejl_besked = 'Forhandleren blev ikke fundet.';
+            } elseif ($eksisterende === 'admin') {
+                $fejl_besked = 'Administrator-kontoen kan ikke redigeres her.';
+            } elseif ($brugernavn === '' || $bc_kunde_nr === '') {
+                $fejl_besked = 'Brugernavn og BC-kundenummer skal udfyldes.';
+            } else {
+                // Tjek at brugernavnet ikke er taget af en ANDEN bruger
+                $stmt = $db->prepare("SELECT COUNT(*) FROM brugere WHERE brugernavn = :u AND id != :id");
+                $stmt->execute([':u' => $brugernavn, ':id' => $bruger_id]);
+                if ($stmt->fetchColumn() > 0) {
+                    $fejl_besked = 'Brugernavnet er allerede optaget af en anden bruger.';
+                } else {
+                    // Slå kundenummeret op i BC for at hente korrekt firmanavn + GUID
+                    try {
+                        $bc_kunde = bc_get_customer_by_number($bc_kunde_nr);
+                        if (!$bc_kunde) {
+                            $fejl_besked = "Kundenummer '$bc_kunde_nr' blev ikke fundet i Business Central. Intet blev ændret.";
+                        } else {
+                            $update = $db->prepare("
+                                UPDATE brugere
+                                SET brugernavn = :u, bc_kunde_nr = :nr, bc_kunde_id = :id_bc, firma_navn = :firma
+                                WHERE id = :id
+                            ");
+                            $update->execute([
+                                ':u'     => $brugernavn,
+                                ':nr'    => $bc_kunde_nr,
+                                ':id_bc' => $bc_kunde['id'],
+                                ':firma' => $bc_kunde['displayName'] ?? $bc_kunde['name'] ?? '',
+                                ':id'    => $bruger_id
+                            ]);
+                            $succes_besked = "Forhandleren blev opdateret og knyttet til '" . ($bc_kunde['displayName'] ?? '') . "' i BC.";
+                        }
+                    } catch (Exception $e) {
+                        $fejl_besked = "Fejl under opslag i Business Central: " . $e->getMessage();
+                    }
+                }
+            }
+        }
     }
 }
 
 // Hent alle brugere
 $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
+
+// Redigeringstilstand: find den valgte forhandler (til prefill af formularen)
+$rediger_bruger = null;
+$rediger_id = intval($_GET['rediger'] ?? 0);
+if ($rediger_id > 0) {
+    foreach ($brugere as $b) {
+        if ((int) $b['id'] === $rediger_id && $b['brugernavn'] !== 'admin') {
+            $rediger_bruger = $b;
+            break;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="da">
@@ -198,8 +259,36 @@ $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
 
         <div class="grid-2 animate-fade-in">
             
-            <!-- Venstre side: Opret bruger form -->
+            <!-- Venstre side: Opret / rediger forhandler -->
             <div>
+                <?php if ($rediger_bruger): ?>
+                <div class="card">
+                    <h3 class="card-title">Rediger forhandler</h3>
+                    <form action="admin.php" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
+                        <input type="hidden" name="action" value="rediger_bruger">
+                        <input type="hidden" name="bruger_id" value="<?php echo (int) $rediger_bruger['id']; ?>">
+
+                        <div class="form-group">
+                            <label for="rediger_brugernavn" class="form-label">Portal brugernavn</label>
+                            <input type="text" id="rediger_brugernavn" name="brugernavn" class="form-control"
+                                   value="<?php echo htmlspecialchars($rediger_bruger['brugernavn']); ?>" required autocomplete="off">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 25px;">
+                            <label for="rediger_bc_kunde_nr" class="form-label">Business Central Kundenummer</label>
+                            <input type="text" id="rediger_bc_kunde_nr" name="bc_kunde_nr" class="form-control"
+                                   value="<?php echo htmlspecialchars($rediger_bruger['bc_kunde_nr']); ?>" required>
+                            <small style="color: var(--text-muted); display: block; margin-top: 6px; font-size: 12px;">
+                                Firmanavn og GUID opdateres automatisk fra BC ved gem. Nuværende firma: <strong><?php echo htmlspecialchars($rediger_bruger['firma_navn']); ?></strong>
+                            </small>
+                        </div>
+
+                        <button type="submit" class="btn btn-block">Gem ændringer</button>
+                        <a href="admin.php" class="btn btn-secondary btn-block" style="text-align: center; margin-top: 10px;">Annuller</a>
+                    </form>
+                </div>
+                <?php else: ?>
                 <div class="card">
                     <h3 class="card-title">Opret ny engros-kunde</h3>
                     <form action="admin.php" method="POST">
@@ -232,6 +321,7 @@ $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
                         </button>
                     </form>
                 </div>
+                <?php endif; ?>
 
                 <div class="card" style="margin-top: 30px;">
                     <h3 class="card-title">Skift dit admin-kodeord</h3>
@@ -305,6 +395,9 @@ $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
                                         <td style="text-align: right;">
                                             <?php if ($b['brugernavn'] !== 'admin'): ?>
                                                 <div style="display: inline-flex; gap: 8px; justify-content: flex-end;">
+                                                    <!-- Rediger forhandler -->
+                                                    <a href="admin.php?rediger=<?php echo (int) $b['id']; ?>" class="action-icon-btn" title="Rediger oplysninger" style="text-decoration: none;">✏️</a>
+
                                                     <!-- Toggle Aktiv status form -->
                                                     <form action="admin.php" method="POST" style="display:inline;">
                                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
