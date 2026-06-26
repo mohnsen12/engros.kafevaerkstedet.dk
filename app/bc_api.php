@@ -349,6 +349,30 @@ function bc_get_items($include_blocked = false) {
 }
 
 /**
+ * Henter en vares billede (binært) fra Business Central.
+ * Returnerer ['code' => HTTP-kode, 'body' => billed-bytes (tom hvis intet billede)].
+ */
+function bc_get_item_picture($item_id) {
+    try {
+        $token = bc_get_token();
+    } catch (Exception $e) {
+        return ['code' => 0, 'body' => ''];
+    }
+    $url = BC_API_BASE . "/items(" . $item_id . ")/picture/pictureContent";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    bc_dns_resolve_curl($ch, $url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ["Authorization: Bearer $token"]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return ['code' => $code, 'body' => ($body === false ? '' : $body)];
+}
+
+/**
  * Henter ALLE varer (inkl. spærrede) med fil-caching, så vi ikke rammer BC ved hvert sidevisning.
  * Bruges af både admin-vareoversigten og kataloget. Cachen deles via items_cache.json.
  *
@@ -422,7 +446,18 @@ function bc_create_customer_address($customer_no, $address_data) {
         'phoneNumber'  => $address_data['phone'] ?? '',
         'email'        => $address_data['email'] ?? ''
     ];
-    return bc_request('POST', "$base/shipToAddresses", $payload);
+    $result = bc_request('POST', "$base/shipToAddresses", $payload);
+
+    // kvwoo ignorerer 'displayName' ved oprettelse (sætter kundens navn). Vi retter
+    // derfor navnet med en efterfølgende PATCH, så ship-to-adressen får det rigtige navn.
+    if ($result['success'] && !empty($address_data['name']) && !empty($result['data']['id'])) {
+        $patch = bc_request('PATCH', "$base/shipToAddresses(" . $result['data']['id'] . ")",
+            ['displayName' => $address_data['name']], ['If-Match: *']);
+        if ($patch['success']) {
+            return $patch;
+        }
+    }
+    return $result;
 }
 
 /**

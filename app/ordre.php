@@ -241,21 +241,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($name === '' || $addressLine1 === '' || $city === '' || $postCode === '') {
                     $fejl_besked = 'Udfyld venligst modtager, adresse, postnr. og by.';
                 } elseif ($gem_adresse) {
-                    // Gem som fast ship-to adresse i BC (kræver en kort kode)
-                    $kode = strtoupper(substr(trim($_POST['gem_kode'] ?? ''), 0, 10));
+                    // Gem som fast ship-to adresse i BC. Adressekoden er valgfri — hvis den
+                    // ikke angives, genererer vi en unik kode automatisk ud fra navnet.
+                    $kode = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $_POST['gem_kode'] ?? ''));
                     if ($kode === '') {
-                        $fejl_besked = 'Angiv en kort adressekode (max 10 tegn) for at gemme adressen i Business Central.';
-                    } else {
-                        $create = bc_create_customer_address($customer_nr, [
-                            'code' => $kode, 'name' => $name, 'addressLine1' => $addressLine1, 'addressLine2' => $addressLine2,
-                            'city' => $city, 'postCode' => $postCode, 'country' => $country,
-                            'contact' => $contact, 'phone' => $phone, 'email' => $email
-                        ]);
-                        if (!$create['success']) {
-                            $fejl_besked = 'Kunne ikke gemme leveringsadressen i Business Central: ' . ($create['error'] ?? 'ukendt fejl');
-                        } else {
-                            $lever_til_type = 'gemt';
+                        $basis = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $name));
+                        $basis = $basis !== '' ? substr($basis, 0, 8) : 'ADR';
+                        // Sikr at koden er unik blandt kundens eksisterende adresser
+                        $optagne = [];
+                        foreach (bc_get_customer_addresses($customer_nr) as $a) {
+                            $optagne[strtoupper($a['code'] ?? '')] = true;
                         }
+                        $kode = $basis;
+                        $n = 1;
+                        while (isset($optagne[$kode])) {
+                            $suffix = (string) $n;
+                            $kode = substr($basis, 0, 10 - strlen($suffix)) . $suffix;
+                            $n++;
+                        }
+                    }
+                    $kode = substr($kode, 0, 10);
+
+                    $create = bc_create_customer_address($customer_nr, [
+                        'code' => $kode, 'name' => $name, 'addressLine1' => $addressLine1, 'addressLine2' => $addressLine2,
+                        'city' => $city, 'postCode' => $postCode, 'country' => $country,
+                        'contact' => $contact, 'phone' => $phone, 'email' => $email
+                    ]);
+                    if (!$create['success']) {
+                        $fejl_besked = 'Kunne ikke gemme leveringsadressen i Business Central: ' . ($create['error'] ?? 'ukendt fejl');
+                    } else {
+                        $lever_til_type = 'gemt';
                     }
                 } else {
                     $lever_til_type = 'engang';
@@ -638,11 +653,11 @@ foreach ($_SESSION['cart'] as $entry) {
                                 <span>Gem denne leveringsadresse i Business Central</span>
                             </label>
                             <div class="form-group" id="gem-kode-row" style="display: none; margin-bottom: 10px;">
-                                <label for="gem_kode" class="form-label">Adressekode (max 10 tegn)</label>
+                                <label for="gem_kode" class="form-label">Adressekode (valgfri — genereres automatisk hvis tom)</label>
                                 <input type="text" id="gem_kode" name="gem_kode" class="form-control" maxlength="10" placeholder="fx 'BUTIK2'">
                             </div>
                             <small style="color: var(--text-muted); display: block; margin-bottom: 25px; font-size: 12px;">
-                                Uden flueben bruges adressen kun på denne ordre (engangsadresse).
+                                Med flueben gemmes adressen som en fast leveringsadresse i Business Central (kan genbruges senere). Uden flueben bruges den kun på denne ordre.
                             </small>
                         </div>
 
