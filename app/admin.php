@@ -105,6 +105,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $succes_besked = "Brugeren '$username' blev slettet fra portalen.";
             }
         }
+        // ─── Handling: SKIFT ADMINS EGET KODEORD ─────────────────────────────
+        elseif ($action === 'skift_admin_kode') {
+            $nuvaerende = $_POST['nuvaerende'] ?? '';
+            $ny         = $_POST['ny'] ?? '';
+            $ny2        = $_POST['ny2'] ?? '';
+
+            $stmt = $db->prepare("SELECT password_hash FROM brugere WHERE id = :id");
+            $stmt->execute([':id' => $_SESSION['bruger_id']]);
+            $hash = $stmt->fetchColumn();
+
+            if (!$hash || !password_verify($nuvaerende, $hash)) {
+                $fejl_besked = 'Det nuværende kodeord er forkert.';
+            } elseif (strlen($ny) < 8) {
+                $fejl_besked = 'Det nye kodeord skal være mindst 8 tegn.';
+            } elseif ($ny !== $ny2) {
+                $fejl_besked = 'De to nye kodeord er ikke ens.';
+            } else {
+                $update = $db->prepare("UPDATE brugere SET password_hash = :hash WHERE id = :id");
+                $update->execute([':hash' => password_hash($ny, PASSWORD_BCRYPT), ':id' => $_SESSION['bruger_id']]);
+                $succes_besked = 'Dit administrator-kodeord blev opdateret.';
+            }
+        }
+        // ─── Handling: NULSTIL EN FORHANDLERS KODEORD ────────────────────────
+        elseif ($action === 'nulstil_kode') {
+            $bruger_id = intval($_POST['bruger_id'] ?? 0);
+            $ny        = $_POST['ny_kode'] ?? '';
+
+            $stmt = $db->prepare("SELECT brugernavn FROM brugere WHERE id = :id");
+            $stmt->execute([':id' => $bruger_id]);
+            $username = $stmt->fetchColumn();
+
+            if (!$username) {
+                $fejl_besked = 'Brugeren blev ikke fundet.';
+            } elseif ($username === 'admin') {
+                $fejl_besked = 'Administrator-kodeordet skiftes via "Skift dit admin-kodeord" (kræver nuværende kodeord).';
+            } elseif (strlen($ny) < 8) {
+                $fejl_besked = 'Det nye kodeord skal være mindst 8 tegn.';
+            } else {
+                $update = $db->prepare("UPDATE brugere SET password_hash = :hash WHERE id = :id");
+                $update->execute([':hash' => password_hash($ny, PASSWORD_BCRYPT), ':id' => $bruger_id]);
+                $succes_besked = "Kodeordet for '$username' blev nulstillet. Udlever det nye kodeord til forhandleren.";
+            }
+        }
     }
 }
 
@@ -189,6 +232,31 @@ $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
                         </button>
                     </form>
                 </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h3 class="card-title">Skift dit admin-kodeord</h3>
+                    <form action="admin.php" method="POST">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
+                        <input type="hidden" name="action" value="skift_admin_kode">
+
+                        <div class="form-group">
+                            <label for="nuvaerende" class="form-label">Nuværende kodeord</label>
+                            <input type="password" id="nuvaerende" name="nuvaerende" class="form-control" required autocomplete="current-password">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="ny" class="form-label">Nyt kodeord (mindst 8 tegn)</label>
+                            <input type="password" id="ny" name="ny" class="form-control" minlength="8" required autocomplete="new-password">
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 25px;">
+                            <label for="ny2" class="form-label">Gentag nyt kodeord</label>
+                            <input type="password" id="ny2" name="ny2" class="form-control" minlength="8" required autocomplete="new-password">
+                        </div>
+
+                        <button type="submit" class="btn btn-block">Opdater kodeord</button>
+                    </form>
+                </div>
             </div>
 
             <!-- Højre side: Liste over brugere -->
@@ -246,7 +314,16 @@ $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
                                                             <?php echo $b['aktiv'] ? '⏸️' : '▶️'; ?>
                                                         </button>
                                                     </form>
-                                                    
+
+                                                    <!-- Nulstil kodeord form -->
+                                                    <form action="admin.php" method="POST" style="display:inline;" onsubmit="return nulstilKode(this);">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
+                                                        <input type="hidden" name="action" value="nulstil_kode">
+                                                        <input type="hidden" name="bruger_id" value="<?php echo $b['id']; ?>">
+                                                        <input type="hidden" name="ny_kode" value="">
+                                                        <button type="submit" class="action-icon-btn" title="Nulstil kodeord">🔑</button>
+                                                    </form>
+
                                                     <!-- Slet bruger form -->
                                                     <form action="admin.php" method="POST" style="display:inline;" onsubmit="return confirm('Er du sikker på, at du vil slette brugeren \'<?php echo htmlspecialchars($b['brugernavn']); ?>\' permanent?');">
                                                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
@@ -275,6 +352,17 @@ $brugere = $db->query("SELECT * FROM brugere ORDER BY id ASC")->fetchAll();
     <footer>
         &copy; <?php echo date('Y'); ?> Kaffeværkstedet ApS. Alle rettigheder forbeholdes.
     </footer>
+
+    <script>
+        // Spørg om nyt kodeord ved nulstilling af en forhandlers adgangskode.
+        function nulstilKode(form) {
+            var p = prompt('Indtast et nyt kodeord for forhandleren (mindst 8 tegn):');
+            if (p === null) return false;            // annulleret
+            if (p.length < 8) { alert('Kodeordet skal være mindst 8 tegn.'); return false; }
+            form.ny_kode.value = p;
+            return true;
+        }
+    </script>
 
 </body>
 </html>
