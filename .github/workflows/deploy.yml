@@ -30,6 +30,7 @@ jobs:
             **/engros.db-journal
             **/engros.db-wal
             **/*_cache.json
+            **/billede_cache/**
             **/token_cache.json
             **/dns_cache.json
             **/php_errors.log

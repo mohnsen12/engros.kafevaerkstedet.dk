@@ -305,9 +305,16 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                         ?>
                                         <tr>
                                             <td>
-                                                <div style="font-weight: 600;"><?php echo htmlspecialchars($item_name); ?></div>
-                                                <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">
-                                                    <?php echo htmlspecialchars($item['number'] ?? ''); ?>
+                                                <div style="display: flex; align-items: center; gap: 12px;">
+                                                    <img src="vare_billede.php?id=<?php echo htmlspecialchars($item['id']); ?>" alt="" loading="lazy"
+                                                         style="width: 44px; height: 44px; object-fit: cover; border-radius: 6px; background: rgba(255,255,255,0.05); flex-shrink: 0;"
+                                                         onerror="this.style.display='none'">
+                                                    <div>
+                                                        <div style="font-weight: 600;"><?php echo htmlspecialchars($item_name); ?></div>
+                                                        <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">
+                                                            <?php echo htmlspecialchars($item['number'] ?? ''); ?>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td>
