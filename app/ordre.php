@@ -569,7 +569,7 @@ foreach ($_SESSION['cart'] as $entry) {
                             <?php if (!empty($adresser)): ?>
                                 <div class="form-group">
                                     <label for="valgt_gemt_kode" class="form-label">Vælg en gemt leveringsadresse</label>
-                                    <select id="valgt_gemt_kode" name="valgt_gemt_kode" class="form-control" style="background-color: var(--bg-dark);" onchange="vaelgGemt()">
+                                    <select id="valgt_gemt_kode" name="valgt_gemt_kode" class="form-control" onchange="vaelgGemt()">
                                         <option value="">— Ny adresse (udfyld felterne nedenfor) —</option>
                                         <?php foreach ($adresser as $adr): ?>
                                             <option value="<?php echo htmlspecialchars($adr['code'] ?? ''); ?>"
@@ -693,7 +693,7 @@ foreach ($_SESSION['cart'] as $entry) {
                         <?php endforeach; ?>
                     </div>
                     
-                    <div style="background-color: rgba(255,255,255,0.02); padding: 15px; border-radius: var(--radius-sm); border: 1px solid var(--border-primary);">
+                    <div style="background-color: var(--bg-muted); padding: 15px; border-radius: var(--radius-sm); border: 1px solid var(--border-primary);">
                         <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--text-muted); margin-bottom: 8px;">
                             <span>Subtotal (vejl. listepriser)</span>
                             <span><?php echo number_format($midlertidig_total, 2, ',', '.'); ?> kr.</span>
