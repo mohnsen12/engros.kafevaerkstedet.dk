@@ -11,6 +11,7 @@ app/variants_cache.json
 app/units_cache.json
 app/item_units_cache.json
 app/item_uom_cache.json
+app/item_unit_prices_cache.json
 app/billede_cache/
 app/php_errors.log
 app/php.ini

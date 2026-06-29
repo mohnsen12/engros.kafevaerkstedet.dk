@@ -611,6 +611,45 @@ function bc_get_item_unit_codes_cached($lifetime = 600) {
 }
 
 /**
+ * Henter vejledende pris pr. vare + enhed fra prislisterne (via kvwoo), cachet.
+ * Returnerer map: itemNo => [ enhedskode => pris ].
+ *
+ * Når der findes flere prislinjer for samme vare+enhed, foretrækkes FORHANDLERE-prislisten
+ * (det er forhandlernes liste). Prisen er vejledende — den endelige, kundespecifikke pris
+ * beregnes af BC ved bestilling.
+ */
+function bc_get_item_unit_prices_cached($lifetime = 600) {
+    $cache_file = __DIR__ . '/item_unit_prices_cache.json';
+    if (file_exists($cache_file) && (time() - filemtime($cache_file) < $lifetime)) {
+        $d = json_decode(file_get_contents($cache_file), true);
+        if (is_array($d)) return $d;
+    }
+    $kv = bc_kvwoo_base();
+    $map    = []; // itemNo => kode => pris
+    $erpref = []; // itemNo => kode => true (nuværende værdi er fra FORHANDLERE)
+    $endpoint = "$kv/wooPriceListLines?\$top=5000";
+    while ($endpoint) {
+        $r = bc_request('GET', $endpoint);
+        if (!$r['success']) break;
+        foreach ($r['data']['value'] ?? [] as $l) {
+            if (($l['status'] ?? '') !== 'Active') continue;
+            $no   = $l['assetNo'] ?? '';
+            $code = $l['unitOfMeasureCode'] ?? '';
+            if ($no === '' || $code === '') continue; // tom = basisenhed (pris fra item.unitPrice)
+            $pris = floatval($l['unitPrice'] ?? 0);
+            $pref = (($l['priceListCode'] ?? '') === 'FORHANDLERE');
+            if (!isset($map[$no][$code]) || ($pref && empty($erpref[$no][$code]))) {
+                $map[$no][$code]    = $pris;
+                $erpref[$no][$code] = $pref;
+            }
+        }
+        $endpoint = $r['data']['@odata.nextLink'] ?? null;
+    }
+    file_put_contents($cache_file, json_encode($map));
+    return $map;
+}
+
+/**
  * Henter varens KOMPLETTE liste af salgsenheder fra BC's "Item Unit of Measure"-tabel,
  * udstillet via kvwoo-API'et som entiteten 'wooItemUnitsOfMeasure'.
  *

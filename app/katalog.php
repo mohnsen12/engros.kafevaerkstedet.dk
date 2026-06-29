@@ -128,10 +128,12 @@ $units_map       = []; // kode => ['id','label']
 $item_unit_codes = []; // itemNo => [koder]  (fra prislister — fallback)
 $item_units      = []; // itemNo => [koder]  (autoritativ, fra Item Unit of Measure)
 $unit_by_id      = []; // unit_id => ['code','label']
+$unit_prices = []; // itemNo => [kode => pris]  (vejledende pris pr. enhed)
 try {
     $units_map       = bc_get_units_cached();
     $item_units      = bc_get_item_units_cached();       // komplet liste (når kvwoo udstiller den)
     $item_unit_codes = bc_get_item_unit_codes_cached();  // fallback fra prislister
+    $unit_prices     = bc_get_item_unit_prices_cached(); // vejledende pris pr. enhed
     foreach ($units_map as $kode => $u) {
         $unit_by_id[$u['id']] = ['code' => $kode, 'label' => $u['label']];
     }
@@ -307,8 +309,15 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                             if (empty($item_name)) continue; // Spring navneløse over
                                             $item_price = floatval($item['unitPrice'] ?? 0);
                                             $enhed      = $item['baseUnitOfMeasureCode'] ?? '';
-                                            $varianter  = $variant_map[$item['number'] ?? ''] ?? [];
+                                            $vare_nr    = $item['number'] ?? '';
+                                            $varianter  = $variant_map[$vare_nr] ?? [];
                                             $enheder    = byg_enheds_valg($item, $item_units, $item_unit_codes, $units_map);
+                                            // Vejledende pris pr. enhed (basisenhed = item.unitPrice; øvrige fra prislisten)
+                                            foreach ($enheder as &$_u) {
+                                                $_u['pris'] = $unit_prices[$vare_nr][$_u['code']] ?? $item_price;
+                                            }
+                                            unset($_u);
+                                            $start_pris = !empty($enheder) ? $enheder[0]['pris'] : $item_price;
                                         ?>
                                         <tr>
                                             <td>
@@ -341,9 +350,9 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                                         <?php endif; ?>
 
                                                         <?php if (count($enheder) > 1): ?>
-                                                            <select name="unit_id" class="form-control" style="min-width: 120px; padding: 6px 8px;">
+                                                            <select name="unit_id" class="form-control" style="min-width: 120px; padding: 6px 8px;" onchange="opdaterPris(this)">
                                                                 <?php foreach ($enheder as $u): ?>
-                                                                    <option value="<?php echo htmlspecialchars($u['id']); ?>"><?php echo htmlspecialchars($u['code']); ?></option>
+                                                                    <option value="<?php echo htmlspecialchars($u['id']); ?>" data-price="<?php echo htmlspecialchars($u['pris']); ?>"><?php echo htmlspecialchars($u['code']); ?></option>
                                                                 <?php endforeach; ?>
                                                             </select>
                                                         <?php elseif (empty($varianter)): ?>
@@ -352,7 +361,7 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                                     </div>
                                             </td>
                                             <td style="text-align: right; white-space: nowrap;">
-                                                <?php echo number_format($item_price, 2, ',', '.'); ?> kr.
+                                                <span class="vejl-pris"><?php echo number_format($start_pris, 2, ',', '.'); ?></span> kr.
                                             </td>
                                             <td style="text-align: center;">
                                                 <div class="qty-stepper">
@@ -471,6 +480,18 @@ foreach ($_SESSION['cart'] as $key => $entry) {
             input.value = val;
             if (input.dataset.autosubmit === '1' && input.form) {
                 input.form.submit();
+            }
+        }
+
+        // Opdatér den viste vejledende pris, når man vælger en anden enhed.
+        function opdaterPris(sel) {
+            var opt = sel.options[sel.selectedIndex];
+            var p = opt.getAttribute('data-price');
+            if (p === null || p === '') return;
+            var row = sel.closest('tr');
+            var el = row ? row.querySelector('.vejl-pris') : null;
+            if (el) {
+                el.textContent = Number(p).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             }
         }
     </script>
