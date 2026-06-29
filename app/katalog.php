@@ -125,11 +125,13 @@ try {
 
 // ─── Hent enheder (cachet, valgfrit) ──────────────────────────────────────────
 $units_map       = []; // kode => ['id','label']
-$item_unit_codes = []; // itemNo => [koder]
+$item_unit_codes = []; // itemNo => [koder]  (fra prislister — fallback)
+$item_units      = []; // itemNo => [koder]  (autoritativ, fra Item Unit of Measure)
 $unit_by_id      = []; // unit_id => ['code','label']
 try {
     $units_map       = bc_get_units_cached();
-    $item_unit_codes = bc_get_item_unit_codes_cached();
+    $item_units      = bc_get_item_units_cached();       // komplet liste (når kvwoo udstiller den)
+    $item_unit_codes = bc_get_item_unit_codes_cached();  // fallback fra prislister
     foreach ($units_map as $kode => $u) {
         $unit_by_id[$u['id']] = ['code' => $kode, 'label' => $u['label']];
     }
@@ -138,13 +140,18 @@ try {
 }
 
 /**
- * Bygger listen af valgbare enheder for en vare: basisenheden + de enheder varen
- * er prissat i (fra prislisterne). Returnerer [ ['id','code','label'], ... ].
+ * Bygger listen af valgbare enheder for en vare. Kilde-prioritet:
+ *   1) Basisenheden (altid med).
+ *   2) Item Unit of Measure fra BC (komplet — inkl. enheder uden pris, fx 250G).
+ *   3) Prisliste-enheder (fallback indtil kvwoo udstiller punkt 2).
+ * Returnerer [ ['id','code','label'], ... ].
  */
-function byg_enheds_valg($item, $item_unit_codes, $units_map) {
+function byg_enheds_valg($item, $item_units, $item_unit_codes, $units_map) {
+    $nr = $item['number'] ?? '';
     $koder = array_merge(
         [$item['baseUnitOfMeasureCode'] ?? ''],
-        $item_unit_codes[$item['number'] ?? ''] ?? []
+        $item_units[$nr] ?? [],
+        $item_unit_codes[$nr] ?? []
     );
     $valg = [];
     $set  = [];
@@ -301,7 +308,7 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                             $item_price = floatval($item['unitPrice'] ?? 0);
                                             $enhed      = $item['baseUnitOfMeasureCode'] ?? '';
                                             $varianter  = $variant_map[$item['number'] ?? ''] ?? [];
-                                            $enheder    = byg_enheds_valg($item, $item_unit_codes, $units_map);
+                                            $enheder    = byg_enheds_valg($item, $item_units, $item_unit_codes, $units_map);
                                         ?>
                                         <tr>
                                             <td>

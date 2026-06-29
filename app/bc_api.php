@@ -611,6 +611,55 @@ function bc_get_item_unit_codes_cached($lifetime = 600) {
 }
 
 /**
+ * Henter varens KOMPLETTE liste af salgsenheder fra BC's "Item Unit of Measure"-tabel,
+ * udstillet via kvwoo-API'et som entiteten 'wooItemUnitsOfMeasure'.
+ *
+ * Dette er den autoritative kilde (modsat prislisterne, der mangler enheder uden egen pris,
+ * fx 250G). Returnerer map: itemNo => ['KG','250G', ...].
+ *
+ * Hvis endpointet endnu ikke findes i BC-extensionen, returneres en tom map (og kataloget
+ * falder tilbage på prisliste-enhederne), så app'en virker uanset.
+ *
+ * Forventet entitet (read-only) i api/kvwoo/woocommerce/v1.0:
+ *   wooItemUnitsOfMeasure: { itemNo, code, qtyPerUnitOfMeasure }
+ */
+function bc_get_item_units_cached($lifetime = 600) {
+    $cache_file = __DIR__ . '/item_uom_cache.json';
+    if (file_exists($cache_file) && (time() - filemtime($cache_file) < $lifetime)) {
+        $d = json_decode(file_get_contents($cache_file), true);
+        if (is_array($d)) return $d;
+    }
+    $kv = bc_kvwoo_base();
+    $samlet = [];
+    $tilgaengeligt = false;
+    $endpoint = "$kv/wooItemUnitsOfMeasure?\$top=5000";
+    while ($endpoint) {
+        $r = bc_request('GET', $endpoint);
+        if (!$r['success']) {
+            // Endpointet findes (endnu) ikke — det er ok, vi falder tilbage på prislisterne.
+            break;
+        }
+        $tilgaengeligt = true;
+        foreach ($r['data']['value'] ?? [] as $u) {
+            $no   = $u['itemNo'] ?? '';
+            $code = $u['code'] ?? ($u['unitOfMeasureCode'] ?? '');
+            if ($no !== '' && $code !== '') {
+                $samlet[$no][$code] = true;
+            }
+        }
+        $endpoint = $r['data']['@odata.nextLink'] ?? null;
+    }
+    $out = [];
+    foreach ($samlet as $no => $codes) {
+        $out[$no] = array_keys($codes);
+    }
+    // Cache altid (også tom), så vi ikke spørger BC ved hver visning. Når endpointet
+    // tilføjes, dukker enhederne op inden for cache-vinduet (10 min).
+    file_put_contents($cache_file, json_encode($out));
+    return $out;
+}
+
+/**
  * Henter alle varevarianter fra den custom kvwoo-API (cachet) og grupperer dem pr. varenummer.
  * kvwoo's 'systemId' er identisk med BC's standard variant-GUID (itemVariantId på en salgslinje),
  * og 'description2' er den brugervenlige variant-tekst (fx "Hele Bønner", "Malet til Espresso").
