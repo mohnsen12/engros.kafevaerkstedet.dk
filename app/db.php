@@ -85,6 +85,39 @@ try {
         $stmt->execute([':hash' => $hash]);
     }
 
+    // 5. Metadata (nøgle/værdi) — bruges til engangs-migreringer og oprydnings-throttling
+    $db->exec("CREATE TABLE IF NOT EXISTS meta (
+        noegle  TEXT PRIMARY KEY,
+        vaerdi  TEXT DEFAULT ''
+    );");
+
+    $meta_get = function ($noegle) use ($db) {
+        $s = $db->prepare("SELECT vaerdi FROM meta WHERE noegle = :n");
+        $s->execute([':n' => $noegle]);
+        $r = $s->fetch();
+        return $r ? $r['vaerdi'] : null;
+    };
+    $meta_set = function ($noegle, $vaerdi) use ($db) {
+        $s = $db->prepare("INSERT OR REPLACE INTO meta (noegle, vaerdi) VALUES (:n, :v)");
+        $s->execute([':n' => $noegle, ':v' => $vaerdi]);
+    };
+
+    // ─── Engangs-oprydning: fjern specifikke testordrer fra historikken ──────────
+    //     (Rører IKKE fakturaerne i Business Central — kun den lokale ordre-log.)
+    if ($meta_get('cleanup_testordrer_v1') === null) {
+        $test_numre = ['104363', '104364', '104474'];
+        $ph = implode(',', array_fill(0, count($test_numre), '?'));
+        $db->prepare("DELETE FROM ordre_log WHERE bc_faktura_nr IN ($ph)")->execute($test_numre);
+        $meta_set('cleanup_testordrer_v1', date('c'));
+    }
+
+    // ─── Løbende oprydning: slet ordrer ældre end 3 måneder (højst én gang i døgnet) ──
+    //     Leveringsstatus anses for irrelevant efter 3 måneder. BC beholder fakturaen.
+    if ($meta_get('sidste_oprydning_3mdr') !== date('Y-m-d')) {
+        $db->exec("DELETE FROM ordre_log WHERE oprettet < datetime('now','-3 months')");
+        $meta_set('sidste_oprydning_3mdr', date('Y-m-d'));
+    }
+
 } catch (PDOException $e) {
     die("Databasefejl: " . $e->getMessage());
 }
