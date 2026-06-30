@@ -33,9 +33,37 @@ define('BC_COMPANY',     $_bc['BC_COMPANY_ID']      ?? '');
 define('BC_ENVIRONMENT', $_bc['BC_ENVIRONMENT']     ?? 'Production');
 define('BC_SCOPE',       $_bc['BC_SCOPE']           ?? 'https://api.businesscentral.dynamics.com/.default');
 
+// Firmanavnet bruges af BC's OData V4 web services (fx Claus_salgsfaktura), der
+// adresserer firmaet på NAVN — ikke på GUID som standard-API'et. Default 'My Company'.
+define('BC_COMPANY_NAME', $_bc['BC_COMPANY_NAME']   ?? 'My Company');
+
 define('BC_TOKEN_URL', 'https://login.microsoftonline.com/' . BC_TENANT . '/oauth2/v2.0/token');
 define('BC_API_BASE',  'https://api.businesscentral.dynamics.com/v2.0/' . BC_TENANT
     . '/' . BC_ENVIRONMENT . '/api/v2.0/companies(' . BC_COMPANY . ')');
+
+// Base-URL til BC's OData V4 web services (publicerede sider), fx Claus_salgsfaktura.
+define('BC_ODATA_BASE', 'https://api.businesscentral.dynamics.com/v2.0/' . BC_TENANT
+    . '/' . BC_ENVIRONMENT . '/ODataV4/Company(' . "'" . str_replace(' ', '%20', BC_COMPANY_NAME) . "'" . ')');
+
+// ─── GLS ─────────────────────────────────────────────────────────────────────
+// Offentlig pakkesporings-URL hos GLS (tracking-nummeret sættes ind hvor {NR} står).
+// Bruges som direkte link uanset om API-integrationen er slået til.
+define('GLS_TRACK_URL', $_bc['GLS_TRACK_URL'] ?? 'https://gls-group.com/DK/da/find-pakke/?match={NR}');
+
+// GLS Track & Trace REST API. Hentes fra bc_config.json. Når GLS_API_URL er tom,
+// er API-integrationen slået fra, og portalen viser blot sporingslinket.
+define('GLS_API_URL',        $_bc['GLS_API_URL']        ?? '');
+define('GLS_API_AUTH',       $_bc['GLS_API_AUTH']       ?? 'basic'); // 'basic' | 'bearer' | 'apikey'
+define('GLS_API_USER',       $_bc['GLS_API_USER']       ?? '');
+define('GLS_API_PASSWORD',   $_bc['GLS_API_PASSWORD']   ?? '');
+define('GLS_API_KEY',        $_bc['GLS_API_KEY']        ?? '');
+define('GLS_API_KEY_HEADER', $_bc['GLS_API_KEY_HEADER'] ?? 'X-Api-Key');
+// Integrationen er først aktiv når både URL og de relevante credentials er udfyldt.
+// (URL'en kan være prefilled, men uden password/nøgle skal vi ikke kalde GLS.)
+define('GLS_API_ENABLED', GLS_API_URL !== '' && (
+    (GLS_API_AUTH === 'basic' && GLS_API_PASSWORD !== '')
+    || (in_array(GLS_API_AUTH, ['bearer', 'apikey'], true) && GLS_API_KEY !== '')
+));
 
 // ─── Lokale stier ────────────────────────────────────────────────────────────
 define('DB_PATH',     __DIR__ . '/engros.db');

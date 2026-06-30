@@ -6,6 +6,8 @@
  */
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/bc_api.php';
+require_once __DIR__ . '/gls_api.php';
 
 // Kræv login
 require_login();
@@ -20,6 +22,66 @@ $bruger_id = $_SESSION['bruger_id'];
 $stmt = $db->prepare("SELECT * FROM ordre_log WHERE bruger_id = :bruger_id ORDER BY oprettet DESC");
 $stmt->execute([':bruger_id' => $bruger_id]);
 $ordrer = $stmt->fetchAll();
+
+// Hent LIVE status + GLS-tracking for kundens fakturaer fra Business Central
+// (web servicen Claus_salgsfaktura). Ét kald, indekseret på fakturanummer.
+// Hvis BC ikke svarer, er mappen tom, og vi falder pænt tilbage på lokal status.
+$bc_status_map = [];
+try {
+    $bc_status_map = bc_get_customer_invoice_status($_SESSION['bc_kunde_nr'] ?? '');
+} catch (Exception $e) {
+    error_log("Historik: kunne ikke hente live ordrestatus fra BC: " . $e->getMessage());
+}
+
+/**
+ * Oversætter en ordres BC-status + GLS-felter til visningsdata til historikken.
+ * Falder tilbage på en neutral "Sendt til BC"-badge, hvis BC ikke kender fakturaen.
+ */
+function hist_status_info($bc_status_map, $faktura_nr) {
+    $rec = $bc_status_map[$faktura_nr] ?? null;
+
+    // Ordrestatus → dansk label + badge-farve
+    $status_label = 'Sendt til BC';
+    $status_badge = 'badge-info';
+    if ($rec) {
+        switch ($rec['status']) {
+            case 'Open':
+                $status_label = 'Igangværende'; $status_badge = 'badge-warning'; break;
+            case 'Released':
+                $status_label = 'Frigivet';     $status_badge = 'badge-success'; break;
+            default:
+                if ($rec['status'] !== '') { $status_label = $rec['status']; $status_badge = 'badge-info'; }
+        }
+    }
+
+    // GLS-forsendelse
+    $gls_numre = $rec['gls_numre'] ?? [];
+    $gls_sent  = $rec && (strcasecmp($rec['gls_shipment_status'] ?? '', 'Sent') === 0 || !empty($gls_numre));
+
+    // Live leveringsstatus pr. pakkenummer (kun hvis GLS API er konfigureret).
+    // gls_get_parcel_status() returnerer null når integrationen er slået fra.
+    $gls_live = [];
+    if ($gls_sent && !empty($gls_numre)) {
+        foreach ($gls_numre as $nr) {
+            $live = gls_get_parcel_status($nr);
+            if ($live !== null) $gls_live[$nr] = $live;
+        }
+    }
+
+    return [
+        'kendt'        => (bool) $rec,
+        'status_label' => $status_label,
+        'status_badge' => $status_badge,
+        'gls_numre'    => $gls_numre,
+        'gls_sent'     => $gls_sent,
+        'gls_live'     => $gls_live,
+    ];
+}
+
+/** Bygger et offentligt GLS-sporingslink for et pakkenummer. */
+function gls_track_link($nr) {
+    return str_replace('{NR}', rawurlencode($nr), GLS_TRACK_URL);
+}
 
 // Håndter detalje visning
 $valgt_ordre_id = intval($_GET['detalje'] ?? 0);
@@ -36,7 +98,7 @@ if ($valgt_ordre_id > 0) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ordrehistorik — Kaffeværkstedet</title>
+    <title>Tidligere bestillinger — Kaffeværkstedet</title>
     <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -49,7 +111,7 @@ if ($valgt_ordre_id > 0) {
             <div class="nav-links">
                 <a href="katalog.php">Varekatalog</a>
                 <a href="adresser.php">Leveringsadresser</a>
-                <a href="historik.php" class="active">Ordrehistorik</a>
+                <a href="historik.php" class="active">Tidligere bestillinger</a>
                 <form action="logout.php" method="POST" style="display: inline;">
                     <button type="submit" class="btn-logout">Log ud</button>
                 </form>
@@ -59,8 +121,8 @@ if ($valgt_ordre_id > 0) {
 
     <div class="main-content">
         <div style="margin-bottom: 30px;">
-            <h1 class="animate-fade-in">Ordrehistorik</h1>
-            <p style="color: var(--text-muted); font-size: 14px;">Oversigt over dine afsendte bestillinger for <?php echo htmlspecialchars($_SESSION['firma_navn']); ?></p>
+            <h1 class="animate-fade-in">Tidligere bestillinger</h1>
+            <p style="color: var(--text-muted); font-size: 14px;">Oversigt over dine bestillinger for <?php echo htmlspecialchars($_SESSION['firma_navn']); ?> — med live status og GLS-pakkesporing fra Business Central.</p>
         </div>
 
         <div class="grid-2 animate-fade-in" style="grid-template-columns: <?php echo $valgt_ordre ? '3.5fr 2.5fr' : '1fr'; ?>; gap: 40px; align-items: start; transition: all 0.3s ease;">
@@ -85,13 +147,15 @@ if ($valgt_ordre_id > 0) {
                                         <th>Modtager</th>
                                         <th>Total (ekskl. moms)</th>
                                         <th>Status</th>
+                                        <th>Forsendelse (GLS)</th>
                                         <th style="text-align: right;">Handling</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php foreach ($ordrer as $o): ?>
-                                        <?php 
+                                        <?php
                                             $active_class = ($valgt_ordre_id === intval($o['id'])) ? 'style="background-color: rgba(197, 155, 108, 0.05);"' : '';
+                                            $si = hist_status_info($bc_status_map, $o['bc_faktura_nr']);
                                         ?>
                                         <tr <?php echo $active_class; ?>>
                                             <td>
@@ -110,7 +174,33 @@ if ($valgt_ordre_id > 0) {
                                                 <?php echo number_format(floatval($o['total_beloeb']), 2, ',', '.'); ?> kr.
                                             </td>
                                             <td>
-                                                <span class="badge badge-success">Sendt til BC</span>
+                                                <span class="badge <?php echo $si['status_badge']; ?>"><?php echo htmlspecialchars($si['status_label']); ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if (!empty($si['gls_numre'])): ?>
+                                                    <?php
+                                                        // Hvis live-status findes, vis den seneste/mest sigende; ellers blot "Afsendt".
+                                                        $live_label = '';
+                                                        foreach ($si['gls_live'] as $lv) {
+                                                            if (!empty($lv['ok']) && $lv['status_label'] !== '') { $live_label = $lv['status_label']; }
+                                                        }
+                                                    ?>
+                                                    <span class="badge badge-success"><?php echo $live_label !== '' ? htmlspecialchars($live_label) : 'Afsendt'; ?></span>
+                                                    <?php foreach ($si['gls_numre'] as $nr): ?>
+                                                        <?php $lv = $si['gls_live'][$nr] ?? null; ?>
+                                                        <a href="<?php echo htmlspecialchars(gls_track_link($nr)); ?>" target="_blank" rel="noopener"
+                                                           style="display: block; font-family: monospace; font-size: 12px; margin-top: 3px;" title="Spor pakken hos GLS">
+                                                            📦 <?php echo htmlspecialchars($nr); ?>
+                                                        </a>
+                                                        <?php if ($lv && !empty($lv['ok']) && $lv['status_label'] !== ''): ?>
+                                                            <small style="display: block; color: var(--text-muted); font-size: 11px; margin-bottom: 4px;"><?php echo htmlspecialchars($lv['status_label']); ?></small>
+                                                        <?php endif; ?>
+                                                    <?php endforeach; ?>
+                                                <?php elseif ($si['gls_sent']): ?>
+                                                    <span class="badge badge-success">Afsendt</span>
+                                                <?php else: ?>
+                                                    <span style="color: var(--text-muted); font-size: 13px;">Ikke afsendt endnu</span>
+                                                <?php endif; ?>
                                             </td>
                                             <td style="text-align: right;">
                                                 <a href="historik.php?detalje=<?php echo $o['id']; ?>" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">
@@ -151,6 +241,61 @@ if ($valgt_ordre_id > 0) {
                     
                     <div style="margin-bottom: 20px; font-size: 13px; color: var(--text-muted);">
                         Bestilt: <?php echo date('d-m-Y H:i', strtotime($valgt_ordre['oprettet'])); ?>
+                    </div>
+
+                    <?php $dsi = hist_status_info($bc_status_map, $valgt_ordre['bc_faktura_nr']); ?>
+                    <div style="border-top: 1px solid var(--border-light); padding-top: 16px; margin-bottom: 20px;">
+                        <h4 style="color: var(--primary); margin-bottom: 10px; font-size: 15px;">Status & forsendelse</h4>
+                        <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 12px;">
+                            <span>Ordrestatus:</span>
+                            <span class="badge <?php echo $dsi['status_badge']; ?>"><?php echo htmlspecialchars($dsi['status_label']); ?></span>
+                        </div>
+
+                        <?php if (!empty($dsi['gls_numre'])): ?>
+                            <div style="font-size: 14px;">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <span>GLS-forsendelse:</span>
+                                    <span class="badge badge-success">Afsendt</span>
+                                </div>
+                                <div style="color: var(--text-muted); font-size: 12px; margin-bottom: 6px;">Klik på et pakkenummer for at spore pakken hos GLS:</div>
+                                <?php foreach ($dsi['gls_numre'] as $nr): ?>
+                                    <?php $lv = $dsi['gls_live'][$nr] ?? null; ?>
+                                    <div style="margin-bottom: 8px;">
+                                        <a href="<?php echo htmlspecialchars(gls_track_link($nr)); ?>" target="_blank" rel="noopener"
+                                           class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-family: monospace;">
+                                            📦 <?php echo htmlspecialchars($nr); ?> →
+                                        </a>
+                                        <?php if ($lv && !empty($lv['ok']) && $lv['status_label'] !== ''): ?>
+                                            <div style="font-size: 13px; margin-top: 4px;">
+                                                Status hos GLS: <strong style="color: var(--primary);"><?php echo htmlspecialchars($lv['status_label']); ?></strong>
+                                                <?php if (!empty($lv['last_event_time'])): ?>
+                                                    <span style="color: var(--text-muted);"> — <?php echo htmlspecialchars($lv['last_event_time']); ?></span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($lv['last_event'])): ?>
+                                                    <div style="color: var(--text-muted); font-size: 12px;"><?php echo htmlspecialchars($lv['last_event']); ?></div>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php elseif ($dsi['gls_sent']): ?>
+                            <div style="font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                                <span>GLS-forsendelse:</span>
+                                <span class="badge badge-success">Afsendt</span>
+                                <small style="color: var(--text-muted);">(pakkenummer endnu ikke registreret)</small>
+                            </div>
+                        <?php else: ?>
+                            <div style="font-size: 14px; color: var(--text-muted);">
+                                📦 Pakken er <strong>ikke afsendt endnu</strong>. Tracking-nummer vises her, så snart ordren er pakket og sendt med GLS.
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (!$dsi['kendt']): ?>
+                            <div style="color: var(--text-muted); font-size: 12px; margin-top: 10px;">
+                                Live status kunne ikke hentes fra Business Central lige nu — viser senest kendte oplysninger.
+                            </div>
+                        <?php endif; ?>
                     </div>
 
                     <h4 style="color: var(--primary); margin-bottom: 10px; font-size: 15px;">Varer:</h4>

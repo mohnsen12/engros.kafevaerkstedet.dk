@@ -135,7 +135,7 @@ if ($rediger_id !== '') {
             <div class="nav-links">
                 <a href="katalog.php">Varekatalog</a>
                 <a href="adresser.php" class="active">Leveringsadresser</a>
-                <a href="historik.php">Ordrehistorik</a>
+                <a href="historik.php">Tidligere bestillinger</a>
                 <form action="logout.php" method="POST" style="display: inline;">
                     <button type="submit" class="btn-logout">Log ud</button>
                 </form>

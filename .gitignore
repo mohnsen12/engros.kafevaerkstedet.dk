@@ -12,6 +12,7 @@ app/units_cache.json
 app/item_units_cache.json
 app/item_uom_cache.json
 app/item_unit_prices_cache.json
+app/gls_status_cache.json
 app/billede_cache/
 app/php_errors.log
 app/php.ini
@@ -20,4 +21,5 @@ app/php.ini
 # Backup- og arbejdsmapper hører ikke i repoet
 backup/
 scratch/
+Kaffevaerkstedet_GLS integration_ocr_fix_unpacked/
 .ftp-deploy-sync-state.json

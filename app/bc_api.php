@@ -751,3 +751,55 @@ function bc_get_variants_cached($lifetime = 600) {
 function bc_get_invoice($invoice_id) {
     return bc_request('GET', "/salesInvoices(" . $invoice_id . ")?\$expand=salesInvoiceLines");
 }
+
+/**
+ * Henter status og GLS-forsendelsesoplysninger for kundens salgsfakturaer fra BC's
+ * publicerede OData V4 web service "Claus_salgsfaktura" (Sales Header, uposterede fakturaer).
+ *
+ * Standard-API'et (api/v2.0) udstiller IKKE de custom-felter vi har brug for
+ * (frigivet-status og GLS-tracking), så vi læser dem her i stedet.
+ *
+ * Vi henter alle kundens fakturaer i ÉT kald og indekserer på fakturanummer ('No'),
+ * så ordrehistorikken kan slå op uden ét kald pr. ordre.
+ *
+ * @param string $customer_no Kundenummeret (fx 'D00138')
+ * @return array Map: fakturanummer => [
+ *                   'status'              => 'Open'|'Released'|...,
+ *                   'gls_tracking'        => 'nr, nr, ...' (rå streng fra BC),
+ *                   'gls_numre'           => ['nr', 'nr', ...] (opdelt liste),
+ *                   'gls_shipment_status' => 'Sent'|'Not Sent'|...
+ *               ]
+ */
+function bc_get_customer_invoice_status($customer_no) {
+    $select = '$select=' . rawurlencode('No,Status,GLS_Tracking_Number,GLS_Shipment_Status');
+    $filter = '$filter=' . rawurlencode("Sell_to_Customer_No eq '" . str_replace("'", "''", $customer_no) . "'");
+    $url    = BC_ODATA_BASE . "/Claus_salgsfaktura?$select&$filter&\$top=1000";
+
+    $result = bc_request('GET', $url);
+    $map = [];
+    if (!$result['success'] || !isset($result['data']['value'])) {
+        // Endpointet er ikke tilgængeligt (eller fejlede) — returnér tom map, så
+        // historikken falder pænt tilbage på den lokalt gemte status.
+        return $map;
+    }
+
+    foreach ($result['data']['value'] as $row) {
+        $no = (string) ($row['No'] ?? '');
+        if ($no === '') continue;
+        $tracking = trim((string) ($row['GLS_Tracking_Number'] ?? ''));
+        $numre = [];
+        if ($tracking !== '') {
+            foreach (preg_split('/[,;\s]+/', $tracking) as $stk) {
+                $stk = trim($stk);
+                if ($stk !== '') $numre[] = $stk;
+            }
+        }
+        $map[$no] = [
+            'status'              => (string) ($row['Status'] ?? ''),
+            'gls_tracking'        => $tracking,
+            'gls_numre'           => $numre,
+            'gls_shipment_status' => (string) ($row['GLS_Shipment_Status'] ?? '')
+        ];
+    }
+    return $map;
+}
