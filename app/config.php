@@ -65,6 +65,17 @@ define('GLS_API_ENABLED', GLS_API_URL !== '' && (
     || (in_array(GLS_API_AUTH, ['bearer', 'apikey'], true) && GLS_API_KEY !== '')
 ));
 
+// ─── Kundespecifik regel: emballagetillæg + fragt (kun D00138) ───────────────
+// For D00138 lægges automatisk et emballagetillæg (vare DIV) på ordren — ét stk
+// pr. bestilt kaffeenhed à 2 kr — samt en fragtlinje (FRAGT15-20) uden antal,
+// som udfyldes manuelt i BC. Kaffe identificeres på vareposteringsgruppen "KAFFE".
+define('EMBALLAGE_KUNDE',        'D00138');
+define('EMBALLAGE_KAFFE_GRUPPE', 'KAFFE');          // generalProductPostingGroupCode for "ristet kaffe"
+define('EMBALLAGE_VARE',         'DIV');            // Varenr. for emballagetillægget
+define('EMBALLAGE_TEKST',        'emballagetillæg');
+define('EMBALLAGE_PRIS',         2);                // kr pr. kaffeenhed (ekskl. moms)
+define('EMBALLAGE_FRAGT_VARE',   'FRAGT15-20');     // Fragtvare (antal sættes i BC)
+
 // ─── Lokale stier ────────────────────────────────────────────────────────────
 define('DB_PATH',     __DIR__ . '/engros.db');
 define('TOKEN_CACHE', __DIR__ . '/token_cache.json');

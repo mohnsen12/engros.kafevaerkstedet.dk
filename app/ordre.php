@@ -138,13 +138,21 @@ if ($step === 'kvittering') {
                         </thead>
                         <tbody>
                             <?php foreach ($ordrelinjer as $linje): ?>
-                                <tr>
-                                    <td style="font-family: monospace; font-size: 13px;"><?php echo htmlspecialchars($linje['number']); ?></td>
-                                    <td><strong><?php echo htmlspecialchars($linje['name']); ?></strong></td>
-                                    <td style="text-align: center;"><?php echo $linje['qty']; ?></td>
-                                    <td style="text-align: right;"><?php echo number_format($linje['unit_price'], 2, ',', '.'); ?> kr.</td>
-                                    <td style="text-align: right; font-weight: 500;"><?php echo number_format($linje['subtotal'], 2, ',', '.'); ?> kr.</td>
-                                </tr>
+                                <?php if (!empty($linje['fragt'])): ?>
+                                    <tr>
+                                        <td style="font-family: monospace; font-size: 13px;"><?php echo htmlspecialchars($linje['number']); ?></td>
+                                        <td><strong><?php echo htmlspecialchars($linje['name']); ?></strong></td>
+                                        <td colspan="3" style="text-align: right; color: var(--text-muted); font-style: italic;">Beregnes ved forsendelse</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <tr>
+                                        <td style="font-family: monospace; font-size: 13px;"><?php echo htmlspecialchars($linje['number']); ?></td>
+                                        <td><strong><?php echo htmlspecialchars($linje['name']); ?></strong></td>
+                                        <td style="text-align: center;"><?php echo $linje['qty']; ?></td>
+                                        <td style="text-align: right;"><?php echo number_format($linje['unit_price'], 2, ',', '.'); ?> kr.</td>
+                                        <td style="text-align: right; font-weight: 500;"><?php echo number_format($linje['subtotal'], 2, ',', '.'); ?> kr.</td>
+                                    </tr>
+                                <?php endif; ?>
                             <?php endforeach; ?>
                             <tr style="border-top: 2px solid var(--border-primary);">
                                 <td colspan="3" style="border: none;"></td>
@@ -324,6 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $lokale_linjer = [];
                 $total_ekskl_moms = 0;
                 $seq = 10000;
+                $kaffe_antal = 0; // Antal bestilte kaffeenheder (til emballagetillæg for D00138)
 
                 foreach ($_SESSION['cart'] as $entry) {
                     $item_guid  = $entry['item_id'];
@@ -354,6 +363,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (($k_item['id'] ?? '') === $item_guid) {
                             $vare_nr   = $k_item['number'];
                             $vare_navn = $k_item['displayName'] ?? $k_item['name'] ?? '';
+                            // Tæl kaffeenheder (vareposteringsgruppe "KAFFE") til emballagetillæg
+                            if (strcasecmp($k_item['generalProductPostingGroupCode'] ?? '', EMBALLAGE_KAFFE_GRUPPE) === 0) {
+                                $kaffe_antal += $qty;
+                            }
                             break;
                         }
                     }
@@ -374,7 +387,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     $seq += 10000;
                 }
-                
+
+                // ─── Kundespecifik regel for D00138: emballagetillæg + fragt ─────────
+                if (strcasecmp($customer_nr, EMBALLAGE_KUNDE) === 0) {
+                    // Slå tillægsvarernes GUID op i kataloget ud fra varenummer
+                    $find_item_id = function ($number) use ($katalog) {
+                        foreach ($katalog as $k) {
+                            if (strcasecmp($k['number'] ?? '', $number) === 0) return $k['id'];
+                        }
+                        return null;
+                    };
+
+                    // 1) Emballagetillæg (DIV): ét stk pr. kaffeenhed à 2 kr — kun hvis der er kaffe
+                    if ($kaffe_antal > 0) {
+                        $div_id = $find_item_id(EMBALLAGE_VARE);
+                        if (!$div_id) {
+                            throw new Exception("Varen '" . EMBALLAGE_VARE . "' (emballagetillæg) blev ikke fundet i kataloget.");
+                        }
+                        $div_res = bc_request('POST', "/salesInvoices($bc_invoice_id)/salesInvoiceLines", [
+                            'lineType'    => 'Item',
+                            'itemId'      => $div_id,
+                            'quantity'    => $kaffe_antal,
+                            'unitPrice'   => EMBALLAGE_PRIS,
+                            'description' => EMBALLAGE_TEKST,
+                            'sequence'    => $seq
+                        ]);
+                        if (!$div_res['success']) {
+                            throw new Exception("Kunne ikke tilføje emballagetillæg: " . ($div_res['error'] ?? ''));
+                        }
+                        $emb_subtotal = floatval($div_res['data']['amountExcludingTax'] ?? (EMBALLAGE_PRIS * $kaffe_antal));
+                        $total_ekskl_moms += $emb_subtotal;
+                        $lokale_linjer[] = [
+                            'id' => '', 'variant_id' => '', 'variant_label' => '', 'unit_label' => '',
+                            'number'     => EMBALLAGE_VARE,
+                            'name'       => EMBALLAGE_TEKST,
+                            'qty'        => $kaffe_antal,
+                            'unit_price' => (float) EMBALLAGE_PRIS,
+                            'subtotal'   => $emb_subtotal
+                        ];
+                        $seq += 10000;
+                    }
+
+                    // 2) Fragt (FRAGT15-20): altid på D00138's ordrer, uden antal (sættes i BC)
+                    $fragt_id = $find_item_id(EMBALLAGE_FRAGT_VARE);
+                    if (!$fragt_id) {
+                        throw new Exception("Fragtvaren '" . EMBALLAGE_FRAGT_VARE . "' blev ikke fundet i kataloget.");
+                    }
+                    $fragt_res = bc_request('POST', "/salesInvoices($bc_invoice_id)/salesInvoiceLines", [
+                        'lineType' => 'Item',
+                        'itemId'   => $fragt_id,
+                        'quantity' => 0,
+                        'sequence' => $seq
+                    ]);
+                    if (!$fragt_res['success']) {
+                        throw new Exception("Kunne ikke tilføje fragtlinje: " . ($fragt_res['error'] ?? ''));
+                    }
+                    $lokale_linjer[] = [
+                        'id' => '', 'variant_id' => '', 'variant_label' => '', 'unit_label' => '',
+                        'number'     => EMBALLAGE_FRAGT_VARE,
+                        'name'       => $fragt_res['data']['description'] ?? 'Fragt',
+                        'qty'        => 0,
+                        'unit_price' => 0,
+                        'subtotal'   => 0,
+                        'fragt'      => true  // markerer linjen så portalen viser "Beregnes ved forsendelse"
+                    ];
+                    $seq += 10000;
+                }
+
                 // 3. Gem ordren i vores lokale SQLite log
                 $insert = $db->prepare("
                     INSERT INTO ordre_log (bruger_id, bc_faktura_nr, bc_faktura_id, lever_til_type, lever_til_navn, lever_til_json, linjer_json, total_beloeb, status)

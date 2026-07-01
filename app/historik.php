@@ -307,8 +307,12 @@ if ($valgt_ordre_id > 0) {
                                     <div style="font-size: 11px; color: var(--text-muted);">Varenr: <?php echo htmlspecialchars($l['number']); ?></div>
                                 </div>
                                 <div style="text-align: right;">
-                                    <div><?php echo $l['qty']; ?> stk. &bull; <?php echo number_format($l['unit_price'], 2, ',', '.'); ?> kr.</div>
-                                    <div style="font-weight: 600; color: var(--primary);"><?php echo number_format($l['subtotal'], 2, ',', '.'); ?> kr.</div>
+                                    <?php if (!empty($l['fragt'])): ?>
+                                        <div style="color: var(--text-muted); font-style: italic;">Beregnes ved forsendelse</div>
+                                    <?php else: ?>
+                                        <div><?php echo $l['qty']; ?> stk. &bull; <?php echo number_format($l['unit_price'], 2, ',', '.'); ?> kr.</div>
+                                        <div style="font-weight: 600; color: var(--primary);"><?php echo number_format($l['subtotal'], 2, ',', '.'); ?> kr.</div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
