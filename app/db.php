@@ -49,6 +49,14 @@ try {
         FOREIGN KEY (bruger_id) REFERENCES brugere(id) ON DELETE CASCADE
     );");
 
+    // 2b. Auto-migrering: tilføj ordre_besked-kolonne til ordre_log (fritekst fra kassen).
+    //     ALTER TABLE fejler hvis kolonnen allerede findes — derfor try/catch.
+    try {
+        $db->exec("ALTER TABLE ordre_log ADD COLUMN ordre_besked TEXT DEFAULT ''");
+    } catch (PDOException $e) {
+        // Kolonnen findes allerede — ignorer
+    }
+
     // 3. Login-forsøg (Brute-force beskyttelse)
     $db->exec("CREATE TABLE IF NOT EXISTS login_forsog (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -165,6 +165,13 @@ if ($step === 'kvittering') {
                     </table>
                 </div>
 
+                <?php if (!empty($ordre['ordre_besked'])): ?>
+                    <div style="background-color: var(--bg-muted); padding: 15px; border-radius: var(--radius-sm); border: 1px solid var(--border-primary); margin-bottom: 30px;">
+                        <h4 style="color: var(--primary); margin-bottom: 8px; font-size: 14px;">Besked til ordren</h4>
+                        <div style="font-size: 14px; line-height: 1.6; white-space: pre-wrap;"><?php echo htmlspecialchars($ordre['ordre_besked']); ?></div>
+                    </div>
+                <?php endif; ?>
+
                 <div style="text-align: center; display: flex; gap: 15px; justify-content: center;">
                     <a href="katalog.php" class="btn">Opret ny bestilling</a>
                     <a href="historik.php" class="btn btn-secondary">Se ordrehistorik</a>
@@ -201,6 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lever_til_type   = 'virksomhed';
 
         $brug_dropshipping = isset($_POST['brug_dropshipping']);
+        $ordre_besked = trim($_POST['ordre_besked'] ?? '');
 
         if (!$brug_dropshipping) {
             // Leveres til virksomheden selv
@@ -454,12 +462,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $seq += 10000;
                 }
 
+                // 2b. Sæt fritekst-besked som "Arbejdsbeskrivelse" på fakturaen i BC.
+                //     Kaldes KUN hvis der er skrevet en besked. Fejl herunder må ikke
+                //     afbryde ordren — faktura + linjer er allerede oprettet i BC.
+                if ($ordre_besked !== '') {
+                    $wd_res = bc_set_invoice_work_description($bc_invoice_id, $ordre_besked);
+                    if (!$wd_res['success']) {
+                        error_log("BC workDescription fejlte for faktura $bc_invoice_id: " . ($wd_res['error'] ?? 'ukendt fejl'));
+                    }
+                }
+
                 // 3. Gem ordren i vores lokale SQLite log
                 $insert = $db->prepare("
-                    INSERT INTO ordre_log (bruger_id, bc_faktura_nr, bc_faktura_id, lever_til_type, lever_til_navn, lever_til_json, linjer_json, total_beloeb, status)
-                    VALUES (:bruger_id, :faktura_nr, :faktura_id, :type, :navn, :adresse_json, :linjer_json, :total, 'oprettet')
+                    INSERT INTO ordre_log (bruger_id, bc_faktura_nr, bc_faktura_id, lever_til_type, lever_til_navn, lever_til_json, linjer_json, total_beloeb, ordre_besked, status)
+                    VALUES (:bruger_id, :faktura_nr, :faktura_id, :type, :navn, :adresse_json, :linjer_json, :total, :besked, 'oprettet')
                 ");
-                
+
                 $insert->execute([
                     ':bruger_id'     => $_SESSION['bruger_id'],
                     ':faktura_nr'    => $bc_invoice_nr,
@@ -468,7 +486,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':navn'          => $adresse_navn,
                     ':adresse_json'  => json_encode($adresse_log_data),
                     ':linjer_json'   => json_encode($lokale_linjer),
-                    ':total'         => $total_ekskl_moms
+                    ':total'         => $total_ekskl_moms,
+                    ':besked'        => $ordre_besked
                 ]);
                 
                 $nyt_ordre_id = $db->lastInsertId();
@@ -619,14 +638,14 @@ foreach ($_SESSION['cart'] as $entry) {
             </div>
         <?php endif; ?>
 
+        <form action="ordre.php" method="POST" id="checkout-form">
         <div class="grid-2 animate-fade-in" style="grid-template-columns: 3fr 2fr; gap: 40px; align-items: start;">
-            
+
             <!-- Venstre: Vælg adresse -->
             <div>
                 <div class="card">
                     <h3 class="card-title" style="margin-bottom: 20px;">Levering</h3>
 
-                    <form action="ordre.php" method="POST" id="checkout-form">
                         <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
 
                         <!-- Standard: leveres til virksomhedens egen adresse -->
@@ -746,7 +765,6 @@ foreach ($_SESSION['cart'] as $entry) {
                                 Send Bestilling 🚀
                             </button>
                         </div>
-                    </form>
                 </div>
             </div>
 
@@ -785,10 +803,22 @@ foreach ($_SESSION['cart'] as $entry) {
                             * Når du sender ordren, kontakter vi Business Central. Systemet udregner automatisk dine specifikke rabatter og priser baseret på din gældende forhandlerkontrakt. Du ser de endelige priser på kvitteringen.
                         </small>
                     </div>
+
+                    <!-- Fritekst-besked til ordren (landet i BC's "Arbejdsbeskrivelse") -->
+                    <div style="margin-top: 20px;">
+                        <label for="ordre_besked" class="form-label" style="font-size: 14px;">Besked til ordren (valgfri)</label>
+                        <textarea id="ordre_besked" name="ordre_besked" class="form-control" rows="3"
+                                  style="resize: vertical; font-family: inherit; margin-top: 6px;"
+                                  placeholder="Skriv evt. en besked til ordren — f.eks. varer der ikke fremgår af listen."></textarea>
+                        <small style="color: var(--text-muted); display: block; margin-top: 6px; font-size: 11px;">
+                            Teksten tilføjes som "Arbejdsbeskrivelse" på salgsfakturaen i Business Central.
+                        </small>
+                    </div>
                 </div>
             </div>
 
         </div>
+        </form>
     </div>
 
     <script>

@@ -322,6 +322,13 @@ if ($valgt_ordre_id > 0) {
                         <span>Total (ekskl. moms):</span>
                         <span style="color: var(--primary);"><?php echo number_format(floatval($valgt_ordre['total_beloeb']), 2, ',', '.'); ?> kr.</span>
                     </div>
+
+                    <?php if (!empty($valgt_ordre['ordre_besked'])): ?>
+                        <div style="background-color: var(--bg-muted); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-primary); margin-top: 16px;">
+                            <h4 style="color: var(--primary); margin-bottom: 6px; font-size: 13px;">Besked til ordren:</h4>
+                            <div style="font-size: 13px; line-height: 1.5; white-space: pre-wrap;"><?php echo htmlspecialchars($valgt_ordre['ordre_besked']); ?></div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 

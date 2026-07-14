@@ -518,6 +518,23 @@ function bc_create_draft_invoice($customer_id, $shipping_data = []) {
 }
 
 /**
+ * Sætter "Arbejdsbeskrivelse" (workDescription) på en eksisterende salgsfaktura.
+ *
+ * Feltet er BC's native "Work Description" på salgsfakturaens hoved — en BLOB i
+ * bagenden, men API'et accepterer en almindelig tekststreng. Kaldes først efter
+ * fakturaen og alle linjerne er oprettet.
+ *
+ * @param string $invoice_id Fakturaens GUID
+ * @param string $tekst      Fritekst-besked (tom streng = ryd feltet)
+ * @return array Resultat fra bc_request() med success/code/data/error
+ */
+function bc_set_invoice_work_description($invoice_id, $tekst) {
+    $post_data = ['workDescription' => $tekst];
+    // If-Match: * tillader opdatering uden at kende ETag (overskriver blindt).
+    return bc_request('PATCH', "/salesInvoices(" . $invoice_id . ")", $post_data, ['If-Match: *']);
+}
+
+/**
  * Tilføjer en varelinje til en salgsfaktura.
  * BC vil automatisk udregne pris og rabat ud fra kundens prisliste.
  *
