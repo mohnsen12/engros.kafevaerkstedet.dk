@@ -462,13 +462,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $seq += 10000;
                 }
 
-                // 2b. Sæt fritekst-besked som "Arbejdsbeskrivelse" på fakturaen i BC.
+                // 2b. Tilføj fritekst-besked som en Comment-linje på fakturaen i BC.
                 //     Kaldes KUN hvis der er skrevet en besked. Fejl herunder må ikke
                 //     afbryde ordren — faktura + linjer er allerede oprettet i BC.
                 if ($ordre_besked !== '') {
-                    $wd_res = bc_set_invoice_work_description($bc_invoice_id, $ordre_besked);
-                    if (!$wd_res['success']) {
-                        error_log("BC workDescription fejlte for faktura $bc_invoice_id: " . ($wd_res['error'] ?? 'ukendt fejl'));
+                    $cm_res = bc_add_invoice_comment($bc_invoice_id, $ordre_besked, $seq + 10000);
+                    if (!$cm_res['success']) {
+                        error_log("BC comment-linje fejlede for faktura $bc_invoice_id: " . ($cm_res['error'] ?? 'ukendt fejl'));
                     }
                 }
 
@@ -811,7 +811,7 @@ foreach ($_SESSION['cart'] as $entry) {
                                   style="resize: vertical; font-family: inherit; margin-top: 6px;"
                                   placeholder="Skriv evt. en besked til ordren — f.eks. varer der ikke fremgår af listen."></textarea>
                         <small style="color: var(--text-muted); display: block; margin-top: 6px; font-size: 11px;">
-                            Teksten tilføjes som "Arbejdsbeskrivelse" på salgsfakturaen i Business Central.
+                            Teksten tilføjes som en kommentar på salgsfakturaen i Business Central.
                         </small>
                     </div>
                 </div>

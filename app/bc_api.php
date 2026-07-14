@@ -518,20 +518,24 @@ function bc_create_draft_invoice($customer_id, $shipping_data = []) {
 }
 
 /**
- * Sætter "Arbejdsbeskrivelse" (workDescription) på en eksisterende salgsfaktura.
+ * Tilføjer en Comment-linje med fritekst på en salgsfaktura.
  *
- * Feltet er BC's native "Work Description" på salgsfakturaens hoved — en BLOB i
- * bagenden, men API'et accepterer en almindelig tekststreng. Kaldes først efter
- * fakturaen og alle linjerne er oprettet.
+ * BC's standard salesInvoice-API har ikke et "Arbejdsbeskrivelse"-felt, så
+ * kundens besked tilføjes som en særskilt kommentarlinje i stedet. Comment-linjer
+ * vises på fakturaen uden beløb — kun som tekst. Kaldes efter varelinjerne.
  *
  * @param string $invoice_id Fakturaens GUID
- * @param string $tekst      Fritekst-besked (tom streng = ryd feltet)
+ * @param string $tekst      Fritekst-besked
+ * @param int    $sequence   Sekvensnummer (højt = vises sidst)
  * @return array Resultat fra bc_request() med success/code/data/error
  */
-function bc_set_invoice_work_description($invoice_id, $tekst) {
-    $post_data = ['workDescription' => $tekst];
-    // If-Match: * tillader opdatering uden at kende ETag (overskriver blindt).
-    return bc_request('PATCH', "/salesInvoices(" . $invoice_id . ")", $post_data, ['If-Match: *']);
+function bc_add_invoice_comment($invoice_id, $tekst, $sequence = 90000) {
+    $post_data = [
+        'lineType'    => 'Comment',
+        'description' => $tekst,
+        'sequence'    => intval($sequence)
+    ];
+    return bc_request('POST', "/salesInvoices(" . $invoice_id . ")/salesInvoiceLines", $post_data);
 }
 
 /**
