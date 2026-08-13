@@ -199,8 +199,6 @@ foreach ($_SESSION['cart'] as $key => $entry) {
     }
     $qty      = (int) $entry['qty'];
     $price    = floatval($found_item['unitPrice'] ?? 0);
-    $subtotal = $price * $qty;
-    $cart_total += $subtotal;
 
     $variant_label = '';
     if (!empty($entry['variant_id']) && isset($variant_by_id[$entry['variant_id']])) {
@@ -209,7 +207,15 @@ foreach ($_SESSION['cart'] as $key => $entry) {
     $unit_label = '';
     if (!empty($entry['unit_id']) && isset($unit_by_id[$entry['unit_id']])) {
         $unit_label = $unit_by_id[$entry['unit_id']]['code'];
+        // Hvis der er en specifik pris for den valgte enhed (fx 250G), bruges den
+        // i stedet for basisprisen (unitPrice for 1 kg).
+        $vare_nr = $found_item['number'] ?? '';
+        if (isset($unit_prices[$vare_nr][$unit_label])) {
+            $price = floatval($unit_prices[$vare_nr][$unit_label]);
+        }
     }
+    $subtotal = $price * $qty;
+    $cart_total += $subtotal;
 
     $cart_details[] = [
         'key'           => $key,

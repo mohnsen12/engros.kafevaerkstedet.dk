@@ -544,6 +544,9 @@ $unit_by_id = [];
 foreach (bc_get_units_cached() as $kode => $u) {
     $unit_by_id[$u['id']] = ['code' => $kode, 'label' => $u['label']];
 }
+// Pris pr. enhed (fx 250G), så kurven viser den rigtige subtotal ved valg af
+// en anden enhed end basisenheden (1 kg). Faldtilbage til item.unitPrice.
+$unit_prices = bc_get_item_unit_prices_cached();
 
 $kurv_varer = [];
 foreach ($_SESSION['cart'] as $entry) {
@@ -554,10 +557,16 @@ foreach ($_SESSION['cart'] as $entry) {
     foreach ($katalog as $item) {
         if (($item['id'] ?? '') === $item_guid) {
             $price = floatval($item['unitPrice'] ?? 0);
-            $subtotal = $price * $qty;
-            $midlertidig_total += $subtotal;
             $variant_label = $variant_id !== '' && isset($variant_by_id[$variant_id]) ? $variant_by_id[$variant_id]['label'] : '';
             $unit_label    = $unit_id !== '' && isset($unit_by_id[$unit_id]) ? $unit_by_id[$unit_id]['code'] : '';
+            // Hvis der er en specifik pris for den valgte enhed (fx 250G), bruges den
+            // i stedet for basisprisen (unitPrice for 1 kg).
+            $vare_nr = $item['number'] ?? '';
+            if ($unit_label !== '' && isset($unit_prices[$vare_nr][$unit_label])) {
+                $price = floatval($unit_prices[$vare_nr][$unit_label]);
+            }
+            $subtotal = $price * $qty;
+            $midlertidig_total += $subtotal;
             $kurv_varer[] = [
                 'name'          => $item['displayName'] ?? $item['name'] ?? '',
                 'variant_label' => $variant_label,
