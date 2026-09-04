@@ -362,7 +362,7 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                                         <?php if (!empty($varianter)): ?>
                                                             <select name="variant_id" class="form-control" style="min-width: 160px; padding: 6px 8px;">
                                                                 <?php foreach ($varianter as $v): ?>
-                                                                    <option value="<?php echo htmlspecialchars($v['id']); ?>">
+                                                                    <option value="<?php echo htmlspecialchars($v['id']); ?>"<?php echo ($v['code'] ?? '') === 'HB' ? ' selected' : ''; ?>>
                                                                         <?php echo htmlspecialchars($v['label']); ?><?php echo $v['code'] !== '' ? ' (' . htmlspecialchars($v['code']) . ')' : ''; ?>
                                                                     </option>
                                                                 <?php endforeach; ?>
