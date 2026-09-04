@@ -209,9 +209,20 @@ foreach ($_SESSION['cart'] as $key => $entry) {
         $unit_label = $unit_by_id[$entry['unit_id']]['code'];
         // Hvis der er en specifik pris for den valgte enhed (fx 250G), bruges den
         // i stedet for basisprisen (unitPrice for 1 kg).
+        // 'BASE' er en FORHANDLERE-rabat på basisenheden (tom enhedskode i BC).
         $vare_nr = $found_item['number'] ?? '';
         if (isset($unit_prices[$vare_nr][$unit_label])) {
             $price = floatval($unit_prices[$vare_nr][$unit_label]);
+        } elseif ($unit_label === '' || $unit_label === ($found_item['baseUnitOfMeasureCode'] ?? '')) {
+            if (isset($unit_prices[$vare_nr]['BASE'])) {
+                $price = floatval($unit_prices[$vare_nr]['BASE']);
+            }
+        }
+    } else {
+        // Ingen enhed valgt — basisenheden. Tjek om der er en BASE-rabat (FORHANDLERE).
+        $vare_nr = $found_item['number'] ?? '';
+        if (isset($unit_prices[$vare_nr]['BASE'])) {
+            $price = floatval($unit_prices[$vare_nr]['BASE']);
         }
     }
     $subtotal = $price * $qty;
@@ -319,8 +330,11 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                             $varianter  = $variant_map[$vare_nr] ?? [];
                                             $enheder    = byg_enheds_valg($item, $item_units, $item_unit_codes, $units_map);
                                             // Vejledende pris pr. enhed (basisenhed = item.unitPrice; øvrige fra prislisten)
+                                            // For basisenheden tjekkes også 'BASE' (FORHANDLERE-rabat på tom enhedskode).
                                             foreach ($enheder as &$_u) {
-                                                $_u['pris'] = $unit_prices[$vare_nr][$_u['code']] ?? $item_price;
+                                                $_u['pris'] = $unit_prices[$vare_nr][$_u['code']]
+                                                    ?? $unit_prices[$vare_nr]['BASE']
+                                                    ?? $item_price;
                                             }
                                             unset($_u);
                                             $start_pris = !empty($enheder) ? $enheder[0]['pris'] : $item_price;

@@ -561,9 +561,12 @@ foreach ($_SESSION['cart'] as $entry) {
             $unit_label    = $unit_id !== '' && isset($unit_by_id[$unit_id]) ? $unit_by_id[$unit_id]['code'] : '';
             // Hvis der er en specifik pris for den valgte enhed (fx 250G), bruges den
             // i stedet for basisprisen (unitPrice for 1 kg).
+            // 'BASE' er en FORHANDLERE-rabat på basisenheden (tom enhedskode i BC).
             $vare_nr = $item['number'] ?? '';
             if ($unit_label !== '' && isset($unit_prices[$vare_nr][$unit_label])) {
                 $price = floatval($unit_prices[$vare_nr][$unit_label]);
+            } elseif (isset($unit_prices[$vare_nr]['BASE'])) {
+                $price = floatval($unit_prices[$vare_nr]['BASE']);
             }
             $subtotal = $price * $qty;
             $midlertidig_total += $subtotal;

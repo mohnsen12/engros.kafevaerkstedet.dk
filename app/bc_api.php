@@ -656,12 +656,15 @@ function bc_get_item_unit_prices_cached($lifetime = 600) {
             if (($l['status'] ?? '') !== 'Active') continue;
             $no   = $l['assetNo'] ?? '';
             $code = $l['unitOfMeasureCode'] ?? '';
-            if ($no === '' || $code === '') continue; // tom = basisenhed (pris fra item.unitPrice)
+            if ($no === '') continue;
+            // Tom enhedskode = basisenhed. Gem under 'BASE' så vi kan slå den op
+            // (fx en FORHANDLERE-rabat på basisprisen modsat item.unitPrice).
+            $code_key = ($code === '') ? 'BASE' : $code;
             $pris = floatval($l['unitPrice'] ?? 0);
             $pref = (($l['priceListCode'] ?? '') === 'FORHANDLERE');
-            if (!isset($map[$no][$code]) || ($pref && empty($erpref[$no][$code]))) {
-                $map[$no][$code]    = $pris;
-                $erpref[$no][$code] = $pref;
+            if (!isset($map[$no][$code_key]) || ($pref && empty($erpref[$no][$code_key]))) {
+                $map[$no][$code_key]    = $pris;
+                $erpref[$no][$code_key] = $pref;
             }
         }
         $endpoint = $r['data']['@odata.nextLink'] ?? null;
