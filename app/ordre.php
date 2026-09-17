@@ -533,7 +533,14 @@ try {
 
 // Beregn foreløbig kurv subtotal til visning
 $midlertidig_total = 0;
-$katalog = bc_get_all_items_cached();
+try {
+    $katalog = bc_get_all_items_cached();
+} catch (Exception $e) {
+    $katalog = [];
+    if (empty($fejl_besked)) {
+        $fejl_besked = "Kunne ikke synkronisere med Business Central: " . $e->getMessage();
+    }
+}
 $variant_by_id = [];
 foreach (bc_get_variants_cached() as $liste) {
     foreach ($liste as $v) {

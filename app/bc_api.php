@@ -333,8 +333,10 @@ function bc_get_items($include_blocked = false) {
     while ($endpoint) {
         $result = bc_request('GET', $endpoint);
         if (!$result['success']) {
-            error_log("Fejl under hentning af varer: " . ($result['error'] ?? ''));
-            break;
+            // Kast i stedet for at fejle stille: ellers viser kataloget en tom
+            // sortimentliste uden advarsel (fx ved udløbet client secret).
+            // Kaldende (katalog, vareadgang, ordre) har alle try/catch.
+            throw new Exception("BC varer: " . ($result['error'] ?? "ukendt fejl (HTTP {$result['code']})"));
         }
         
         if (isset($result['data']['value'])) {
