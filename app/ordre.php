@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/bc_api.php';
+require_once __DIR__ . '/ristetemp.php';
 
 // Kræv login
 require_login();
@@ -147,7 +148,12 @@ if ($step === 'kvittering') {
                                 <?php else: ?>
                                     <tr>
                                         <td style="font-family: monospace; font-size: 13px;"><?php echo htmlspecialchars($linje['number']); ?></td>
-                                        <td><strong><?php echo htmlspecialchars($linje['name']); ?></strong></td>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($linje['name']); ?></strong>
+                                            <?php if ($rt = ristetemp_tekst($linje['number'] ?? '')): ?>
+                                                <br><span style="color: var(--primary); font-size: 12px;">🔥 <?php echo htmlspecialchars($rt); ?></span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td style="text-align: center;"><?php echo $linje['qty']; ?></td>
                                         <td style="text-align: right;"><?php echo number_format($linje['unit_price'], 2, ',', '.'); ?> kr.</td>
                                         <td style="text-align: right; font-weight: 500;"><?php echo number_format($linje['subtotal'], 2, ',', '.'); ?> kr.</td>
@@ -579,6 +585,7 @@ foreach ($_SESSION['cart'] as $entry) {
             $midlertidig_total += $subtotal;
             $kurv_varer[] = [
                 'name'          => $item['displayName'] ?? $item['name'] ?? '',
+                'number'        => $vare_nr,
                 'variant_label' => $variant_label,
                 'unit_label'    => $unit_label,
                 'qty'           => $qty,
@@ -797,6 +804,9 @@ foreach ($_SESSION['cart'] as $entry) {
                             <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">
                                 <div style="font-size: 14px;">
                                     <strong><?php echo htmlspecialchars($item['name']); ?></strong>
+                                    <?php if ($rt = ristetemp_tekst($item['number'] ?? '')): ?>
+                                        <br><span style="color: var(--primary); font-size: 12px;">🔥 <?php echo htmlspecialchars($rt); ?></span>
+                                    <?php endif; ?>
                                     <?php $detalje = trim(($item['variant_label'] ?? '') . ' ' . (!empty($item['unit_label']) ? '· ' . $item['unit_label'] : '')); ?>
                                     <?php if ($detalje !== ''): ?>
                                         <span style="color: var(--primary); font-size: 12px;">— <?php echo htmlspecialchars($detalje); ?></span>

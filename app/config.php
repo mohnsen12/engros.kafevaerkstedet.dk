@@ -76,6 +76,13 @@ define('EMBALLAGE_TEKST',        'emballagetillæg');
 define('EMBALLAGE_PRIS',         2);                // kr pr. kaffeenhed (ekskl. moms)
 define('EMBALLAGE_FRAGT_VARE',   'FRAGT15-20');     // Fragtvare (antal sættes i BC)
 
+// ─── Ristetemperatur på bestillingsarket ─────────────────────────────────────
+// Kaffernes ristetemperaturer kommer fra produktion.local's opskrifter
+// (app/ristetemperaturer.json, eksporteres via tools/eksport_ristetemp.bat).
+// Vises kun for disse kundenumre (ristetemp.php matcher på varenummerets
+// første 4 cifre — resten af nummeret er emballage).
+define('RISTETEMP_KUNDER', ['D00149']);
+
 // ─── Lokale stier ────────────────────────────────────────────────────────────
 define('DB_PATH',     __DIR__ . '/engros.db');
 define('TOKEN_CACHE', __DIR__ . '/token_cache.json');
