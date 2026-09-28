@@ -468,11 +468,9 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                             <input type="hidden" name="action" value="update">
                                             <input type="hidden" name="cart_key" value="<?php echo htmlspecialchars($item['key']); ?>">
                                             <div class="qty-stepper">
-                                                <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,-18)">−18</button>
                                                 <button type="button" class="qty-btn" onclick="stepQty(this,-1)">−</button>
                                                 <input type="number" name="quantity" value="<?php echo $item['qty']; ?>" min="0" class="qty-input" data-autosubmit="1">
                                                 <button type="button" class="qty-btn" onclick="stepQty(this,1)">+</button>
-                                                <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,18)">+18</button>
                                             </div>
                                         </form>
 
