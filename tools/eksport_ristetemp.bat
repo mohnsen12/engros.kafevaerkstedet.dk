@@ -7,8 +7,8 @@ echo   produktion.local (opskrifter) -^> bestillingsportalen
 echo ==========================================================
 echo.
 
-REM 1) Eksportér aktive opskrifters sluttemperaturer til app/ristetemperaturer.json
-REM    (FVST's php.ini har pdo_sqlite-driveren, som portalens ikke har)
+REM 1) Hent aktive opskrifters sluttemperaturer fra produktion.local (netvaerk)
+REM    og skriv dem til app/ristetemperaturer.json
 "C:\Users\Claus\AppData\Roaming\Local\lightning-services\php-8.2.29+0\bin\win64\php.exe" -c "C:\Users\Claus\Documents\antigravity\FVST_AI_PROJEKT\app\php.ini" "%~dp0eksport_ristetemperaturer.php"
 if %errorlevel% neq 0 (
     echo.
