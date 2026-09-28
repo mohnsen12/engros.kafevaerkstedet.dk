@@ -410,7 +410,7 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                                 <div class="qty-stepper">
                                                     <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,-18)">−18</button>
                                                     <button type="button" class="qty-btn" onclick="stepQty(this,-1)">−</button>
-                                                    <input type="number" name="quantity" value="1" min="1" max="1000" class="qty-input">
+                                                    <input type="number" name="quantity" value="0" min="0" max="1000" class="qty-input">
                                                     <button type="button" class="qty-btn" onclick="stepQty(this,1)">+</button>
                                                     <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,18)">+18</button>
                                                 </div>
