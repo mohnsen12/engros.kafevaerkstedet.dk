@@ -7,6 +7,7 @@
 
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/bc_api.php';
+require_once __DIR__ . '/ristetemp.php';
 
 // Kræv at brugeren er logget ind som forhandler
 require_login();
@@ -350,6 +351,9 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                                         <div style="font-size: 12px; color: var(--text-muted); font-family: monospace;">
                                                             <?php echo htmlspecialchars($item['number'] ?? ''); ?>
                                                         </div>
+                                                        <?php if ($rt = ristetemp_tekst($vare_nr)): ?>
+                                                            <div style="font-size: 12px; color: var(--primary);">🔥 <?php echo htmlspecialchars($rt); ?></div>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </div>
                                             </td>

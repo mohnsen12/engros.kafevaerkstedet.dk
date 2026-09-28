@@ -8,7 +8,6 @@
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/bc_api.php';
 require_once __DIR__ . '/gls_api.php';
-require_once __DIR__ . '/ristetemp.php';
 
 // Kræv login
 require_login();
@@ -304,12 +303,7 @@ if ($valgt_ordre_id > 0) {
                         <?php foreach ($linjer as $l): ?>
                             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
                                 <div style="flex: 1; padding-right: 10px;">
-                                    <div style="font-weight: 500;">
-                                        <?php echo htmlspecialchars($l['name']); ?>
-                                        <?php if ($rt = ristetemp_tekst($l['number'] ?? '')): ?>
-                                            <span style="color: var(--primary); font-size: 12px;"> — 🔥 <?php echo htmlspecialchars($rt); ?></span>
-                                        <?php endif; ?>
-                                    </div>
+                                    <div style="font-weight: 500;"><?php echo htmlspecialchars($l['name']); ?></div>
                                     <div style="font-size: 11px; color: var(--text-muted);">Varenr: <?php echo htmlspecialchars($l['number']); ?></div>
                                 </div>
                                 <div style="text-align: right;">
