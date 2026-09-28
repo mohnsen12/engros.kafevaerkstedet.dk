@@ -488,6 +488,13 @@ tr:hover td {
     -webkit-appearance: none;
     margin: 0;
 }
+/* Bredere stepper-knapper med tekst (fx −18 / +18) */
+.qty-btn-wide {
+    width: auto;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 600;
+}
 
 /* Cart overlay / layout */
 .cart-summary {

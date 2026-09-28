@@ -182,6 +182,25 @@ if (!empty($search)) {
     $display_items = $items;
 }
 
+// ─── Kundespecifik sortering (KATALOG_SORT_KUNDER) ───────────────────────────
+// 1) Filter-kaffe øverst, 2) Light Espresso / OMNI, 3) Dark Espresso,
+// 4) alle andre. Rækkefølgen inden for hver gruppe bevares.
+if (in_array($_SESSION['bc_kunde_nr'] ?? '', KATALOG_SORT_KUNDER, true)) {
+    $gruppe_af = function ($item): int {
+        $n = strtolower($item['displayName'] ?? $item['name'] ?? '');
+        if (strpos($n, 'filter') !== false) return 1;
+        if (strpos($n, 'light espresso') !== false || strpos($n, 'omni') !== false) return 2;
+        if (strpos($n, 'dark espresso') !== false) return 3;
+        return 4;
+    };
+    $med_nokkel = [];
+    foreach ($display_items as $i => $item) {
+        $med_nokkel[] = ['g' => $gruppe_af($item), 'i' => $i, 'v' => $item];
+    }
+    usort($med_nokkel, fn($a, $b) => $a['g'] <=> $b['g'] ?: $a['i'] <=> $b['i']);
+    $display_items = array_column($med_nokkel, 'v');
+}
+
 // Strukturér kurven til visning
 $cart_details = [];
 $cart_total = 0;
@@ -389,9 +408,11 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                             </td>
                                             <td style="text-align: center;">
                                                 <div class="qty-stepper">
+                                                    <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,-18)">−18</button>
                                                     <button type="button" class="qty-btn" onclick="stepQty(this,-1)">−</button>
                                                     <input type="number" name="quantity" value="1" min="1" max="1000" class="qty-input">
                                                     <button type="button" class="qty-btn" onclick="stepQty(this,1)">+</button>
+                                                    <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,18)">+18</button>
                                                 </div>
                                             </td>
                                             <td style="text-align: right;">
@@ -447,9 +468,11 @@ foreach ($_SESSION['cart'] as $key => $entry) {
                                             <input type="hidden" name="action" value="update">
                                             <input type="hidden" name="cart_key" value="<?php echo htmlspecialchars($item['key']); ?>">
                                             <div class="qty-stepper">
+                                                <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,-18)">−18</button>
                                                 <button type="button" class="qty-btn" onclick="stepQty(this,-1)">−</button>
                                                 <input type="number" name="quantity" value="<?php echo $item['qty']; ?>" min="0" class="qty-input" data-autosubmit="1">
                                                 <button type="button" class="qty-btn" onclick="stepQty(this,1)">+</button>
+                                                <button type="button" class="qty-btn qty-btn-wide" onclick="stepQty(this,18)">+18</button>
                                             </div>
                                         </form>
 

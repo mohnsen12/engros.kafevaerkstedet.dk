@@ -83,6 +83,11 @@ define('EMBALLAGE_FRAGT_VARE',   'FRAGT15-20');     // Fragtvare (antal sættes 
 // første 4 cifre — resten af nummeret er emballage).
 define('RISTETEMP_KUNDER', ['D00149']);
 
+// ─── Katalogsortering (kun disse kunder) ─────────────────────────────────────
+// Filter-varer øverst, derefter Light Espresso/OMNI, derefter Dark Espresso,
+// til sidst alle andre (inden for hver gruppe bevares rækkefølgen).
+define('KATALOG_SORT_KUNDER', ['D00149']);
+
 // ─── Lokale stier ────────────────────────────────────────────────────────────
 define('DB_PATH',     __DIR__ . '/engros.db');
 define('TOKEN_CACHE', __DIR__ . '/token_cache.json');
