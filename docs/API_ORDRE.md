@@ -12,7 +12,7 @@ forhandlerens aftalepriser.
 2. Nøglen sendes med alle kald i headeren `X-Api-Key`.
 3. Mistes nøglen, genererer Kaffeværkstedet en ny — den gamle holder op med at virke.
 
-**Endpoint:** `https://DOMAENE/api_ordre.php` *(domænet oplyses af Kaffeværkstedet)*
+**Endpoint:** `https://engros.kafevaerkstedet.dk/api_ordre.php` *(domænet oplyses af Kaffeværkstedet)*
 
 ## Kald
 
@@ -37,7 +37,7 @@ $ordre = [
     ],
 ];
 
-$ch = curl_init('https://DOMAENE/api_ordre.php');
+$ch = curl_init('https://engros.kafevaerkstedet.dk/api_ordre.php');
 curl_setopt_array($ch, [
     CURLOPT_POST           => true,
     CURLOPT_RETURNTRANSFER => true,
