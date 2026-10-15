@@ -12,7 +12,21 @@ forhandlerens aftalepriser.
 2. Nøglen sendes med alle kald i headeren `X-Api-Key`.
 3. Mistes nøglen, genererer Kaffeværkstedet en ny — den gamle holder op med at virke.
 
-**Endpoint:** `https://engros.kafevaerkstedet.dk/api_ordre.php` *(domænet oplyses af Kaffeværkstedet)*
+**Endpoint:** `https://engros.kafevaerkstedet.dk/api_ordre.php`
+
+## Hurtig-test (curl)
+
+```bash
+# 1) Hent jeres sortiment — svarer med jeres REELLE varer (varenumre, priser,
+#    enheder, varianter) og er dermed selv det bedste eksempel på produktdata:
+curl -s "https://engros.kafevaerkstedet.dk/api_varer.php" -H "X-Api-Key: DIN-NOEGLE"
+
+# 2) Send en ordre (bemærk: der oprettes en RIGTIG ordre-kladde hos os —
+#    koordinér den første test med Kaffeværkstedet):
+curl -s -X POST "https://engros.kafevaerkstedet.dk/api_ordre.php" \
+  -H "Content-Type: application/json" -H "X-Api-Key: DIN-NOEGLE" \
+  -d '{"ordrenr_ekstern":"TEST-1","linjer":[{"varenr":"1104-60336363","antal":1}]}'
+```
 
 ## Kald
 
