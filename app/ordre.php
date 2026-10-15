@@ -313,19 +313,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Hvis der ikke er fejl, opret fakturaen i BC
         if (empty($fejl_besked)) {
             try {
-                // 1. Opret draft salgsfaktura i BC
+                // 1. Valider HELE kurven mod brugerens sortiment FØR noget sendes til BC.
+                //    Kurven kan indeholde varer hvis Vareadgang er blevet fjernet, efter
+                //    de kom i kurven — og add-handleren i kataloget validerer (naturligvis)
+                //    kun ved tilføjelse. Ugyldige varer fjernes fra kurven og afviser ordren.
+                $katalog = bc_get_all_items_cached();
+                $item_by_id = [];
+                foreach ($katalog as $k) {
+                    if (($k['id'] ?? '') !== '') $item_by_id[$k['id']] = $k;
+                }
+                $tilladte_checkout = [];
+                $st = $db->prepare("SELECT item_number FROM bruger_vareadgang WHERE bruger_id = :id");
+                $st->execute([':id' => $_SESSION['bruger_id']]);
+                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $tn) {
+                    $tilladte_checkout[strtoupper($tn)] = true;
+                }
+                $ugyldige_navne = [];
+                foreach ($_SESSION['cart'] as $cart_key => $entry) {
+                    $k_item = $item_by_id[$entry['item_id']] ?? null;
+                    if (!$k_item || empty($tilladte_checkout[strtoupper($k_item['number'] ?? '')]) || !empty($k_item['blocked'])) {
+                        $ugyldige_navne[] = $k_item ? ($k_item['displayName'] ?? $k_item['number']) : ($entry['item_id'] ?? 'ukendt vare');
+                        unset($_SESSION['cart'][$cart_key]);
+                    }
+                }
+                if (!empty($ugyldige_navne)) {
+                    throw new Exception("Følgende varer er ikke længere tilgængelige for din konto og er fjernet fra din kurv: "
+                        . implode(', ', array_unique($ugyldige_navne)) . ". Gennemse din kurv og send ordren igen.");
+                }
+
+                // 2. Opret draft salgsfaktura i BC
                 $invoice_res = bc_create_draft_invoice($customer_id, $shipping_data);
-                
+
                 if (!$invoice_res['success']) {
                     throw new Exception("Kunne ikke oprette salgsfaktura: " . ($invoice_res['error'] ?? 'Ukendt fejl'));
                 }
-                
+
                 $bc_invoice_id = $invoice_res['data']['id'];
                 $bc_invoice_nr = $invoice_res['data']['number'] ?? 'Draft';
-                
-                // 2. Tilføj alle linjer til fakturaen
-                // Hent varekatalog + varianter + enheder for at kende navne/koder (til den lokale log)
-                $katalog       = bc_get_all_items_cached();
+
+                // 3. Tilføj alle linjer til fakturaen
+                // (katalog, varianter og enheder hentes til navne/koder til den lokale log)
                 $variant_by_id = [];
                 foreach (bc_get_variants_cached() as $liste) {
                     foreach ($liste as $v) {
@@ -472,7 +499,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
 
-                // 3. Gem ordren i vores lokale SQLite log
+                // 4. Gem ordren i vores lokale SQLite log
                 $insert = $db->prepare("
                     INSERT INTO ordre_log (bruger_id, bc_faktura_nr, bc_faktura_id, lever_til_type, lever_til_navn, lever_til_json, linjer_json, total_beloeb, ordre_besked, status)
                     VALUES (:bruger_id, :faktura_nr, :faktura_id, :type, :navn, :adresse_json, :linjer_json, :total, :besked, 'oprettet')
@@ -492,10 +519,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $nyt_ordre_id = $db->lastInsertId();
                 
-                // 4. Tøm kurven
+                // 5. Tøm kurven
                 $_SESSION['cart'] = [];
                 
-                // 5. Omdiriger til kvittering
+                // 6. Omdiriger til kvittering
                 header("Location: ordre.php?step=kvittering&id=" . $nyt_ordre_id);
                 exit;
                 

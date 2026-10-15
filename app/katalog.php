@@ -47,7 +47,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $variant_id = trim($_POST['variant_id'] ?? '');
             $unit_id    = trim($_POST['unit_id'] ?? '');
             $quantity   = intval($_POST['quantity'] ?? 0);
+
+            // Server-side validering: varen skal være i brugerens sortiment (samme
+            // regler som katalogvisningen) — ellers kunne et konstrueret POST-lægge
+            // andre kunders specielvarer i kurven.
+            $vare_gyldig = false;
             if ($item_id !== '' && $quantity > 0) {
+                try {
+                    $alle_varer_add = bc_get_all_items_cached();
+                } catch (Exception $e) {
+                    $alle_varer_add = [];
+                }
+                $tilladte_add = [];
+                $st = $db->prepare("SELECT item_number FROM bruger_vareadgang WHERE bruger_id = :id");
+                $st->execute([':id' => $_SESSION['bruger_id']]);
+                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $tn) {
+                    $tilladte_add[strtoupper($tn)] = true;
+                }
+                foreach ($alle_varer_add as $it) {
+                    if (($it['id'] ?? '') === $item_id) {
+                        $nr = strtoupper($it['number'] ?? '');
+                        $vare_gyldig = isset($tilladte_add[$nr]) && empty($it['blocked']);
+                        break;
+                    }
+                }
+            }
+
+            if ($vare_gyldig) {
                 $key = cart_key($item_id, $variant_id, $unit_id);
                 if (isset($_SESSION['cart'][$key])) {
                     $_SESSION['cart'][$key]['qty'] += $quantity;
@@ -55,6 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['cart'][$key] = ['item_id' => $item_id, 'variant_id' => $variant_id, 'unit_id' => $unit_id, 'qty' => $quantity];
                 }
                 $succes_besked = 'Vare blev tilføjet til indkøbskurven.';
+            } elseif ($item_id !== '' && $quantity > 0) {
+                $fejl_besked = 'Varen er ikke en del af dit sortiment og kan ikke tilføjes.';
             }
         } elseif ($action === 'update') {
             $key      = $_POST['cart_key'] ?? '';
@@ -76,13 +104,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Redirect for at undgå at sende POST igen ved refresh
-        header("Location: katalog.php?success=" . urlencode($succes_besked));
+        // (fejlbeskeder sendes med i URL'en, så en afvist vare forklarer hvorfor)
+        if ($fejl_besked !== '') {
+            header("Location: katalog.php?fejl=" . urlencode($fejl_besked));
+        } else {
+            header("Location: katalog.php?success=" . urlencode($succes_besked));
+        }
         exit;
     }
 }
 
 if (isset($_GET['success'])) {
     $succes_besked = $_GET['success'];
+}
+if (isset($_GET['fejl'])) {
+    $fejl_besked = $_GET['fejl'];
 }
 
 // ─── Hent varer (cachet) og filtrér til kundens tilladte sortiment ────────────
