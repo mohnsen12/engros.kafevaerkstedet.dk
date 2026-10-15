@@ -140,6 +140,12 @@ $variant_map = [];
 try { $variant_map = bc_get_variants_cached(); } catch (Exception $e) { /* valgfri */ }
 $units_map = [];
 try { $units_map = bc_get_units_cached(); } catch (Exception $e) { /* valgfri */ }
+// Varens egne salgsenheder (samme kilder som kataloget/api_varer: basis +
+// Item-UoM + prisliste-enheder) — en enhed må KUN bruges på varer der har den.
+$item_uom = [];
+try { $item_uom = bc_get_item_units_cached(); } catch (Exception $e) {}
+$item_pl_enheder = [];
+try { $item_pl_enheder = bc_get_item_unit_codes_cached(); } catch (Exception $e) {}
 
 // Forhandlerens tilladte varer (samme tjek som katalog.php — server-side her)
 $tilladte_numre = [];
@@ -166,7 +172,10 @@ foreach ($linjer_ind as $i => $l) {
     if (!is_numeric($antal) || (float) $antal <= 0 || (float) $antal > 10000) {
         api_svar(400, ['success' => false, 'fejl' => "linjer[$i].antal skal være et tal mellem 1 og 10000."]);
     }
-    $antal = (int) round((float) $antal);
+    if (fmod((float) $antal, 1.0) !== 0.0) {
+        api_svar(400, ['success' => false, 'fejl' => "linjer[$i].antal skal være et helt tal uden decimaler."]);
+    }
+    $antal = (int) $antal;
 
     $item = $item_by_nr[$varenr] ?? null;
     if (!$item) {
@@ -191,11 +200,20 @@ foreach ($linjer_ind as $i => $l) {
         }
     }
 
-    // Enhedskode → GUID (fx 'KG', '250G')
+    // Enhedskode → GUID (fx 'KG', '250G') — skal findes globalt OG være en af
+    // varens egne salgsenheder (ellers beregner BC et vilkårligt/principløst beløb).
     $unit_id = '';
     if ($enhed_kode !== '') {
         if (!isset($units_map[$enhed_kode])) {
             api_svar(400, ['success' => false, 'fejl' => "Enheden '$enhed_kode' findes ikke.", 'detaljer' => "linjer[$i]"]);
+        }
+        $vare_enheder = array_merge(
+            [$item['baseUnitOfMeasureCode'] ?? ''],
+            $item_uom[$varenr] ?? [],
+            $item_pl_enheder[$varenr] ?? []
+        );
+        if (!in_array($enhed_kode, $vare_enheder, true)) {
+            api_svar(400, ['success' => false, 'fejl' => "Enheden '$enhed_kode' er ikke en salgsenhed på varen '$varenr'. Gyldige enheder: " . implode(', ', array_filter(array_unique($vare_enheder))), 'detaljer' => "linjer[$i]"]);
         }
         $unit_id = $units_map[$enhed_kode]['id'];
     }
@@ -251,11 +269,12 @@ try {
             'subtotal'      => $calculated_subtotal
         ];
         $svar_linjer[] = [
-            'varenr'   => $v['varenr'],
-            'navn'     => $v['item']['displayName'] ?? $v['item']['name'] ?? '',
-            'antal'    => $v['antal'],
-            'pris_stk' => $calculated_unit_price,
-            'subtotal' => $calculated_subtotal
+            'varenr'          => $v['varenr'],
+            'navn'            => $v['item']['displayName'] ?? $v['item']['name'] ?? '',
+            'antal'           => $v['antal'],
+            'pris_stk'        => $calculated_unit_price,
+            'pris_stk_netto'  => $v['antal'] > 0 ? round($calculated_subtotal / $v['antal'], 2) : $calculated_unit_price,
+            'subtotal'        => $calculated_subtotal
         ];
         $seq += 10000;
     }

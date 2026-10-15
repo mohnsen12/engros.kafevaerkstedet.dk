@@ -92,13 +92,14 @@ if ($svar['success'] ?? false) {
     "ordrenr_ekstern": "WS-2026-1001",
     "total_ekskl_moms": 516.0,
     "linjer": [
-        {"varenr": "1104-60336363", "navn": "Colombia …", "antal": 2, "pris_stk": 129.0, "subtotal": 258.0}
+        {"varenr": "1104-60336363", "navn": "Colombia …", "antal": 2, "pris_stk": 129.0, "pris_stk_netto": 129.0, "subtotal": 258.0}
     ]
 }
 ```
 
 Priserne beregnes af Business Central ud forhandlerens aftalepris — brug dem gerne
 til jeres egen bogføring. Beløbene er ekskl. moms.
+- `pris_stk` er listeprisen forinden eventuel aftalerabat, `pris_stk_netto` er prisen pr. stk efter jeres aftalerabat (= subtotal / antal). Brug `subtotal` og `pris_stk_netto` til jeres egen bogføring.
 
 **Fejl — altid JSON med `success: false` og `fejl`:**
 
