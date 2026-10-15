@@ -116,3 +116,61 @@ til jeres egen bogføring. Beløbene er ekskl. moms.
 - Send **kun varer fra Kaffeværkstedet** i kaldet — jeres egne/andre leverandørers varer skal holdes udenfor.
 - Send ét kald pr. ordre (ikke pr. linje).
 - Status på ordren (pakket/afsendt, GLS-sporing) ses af forhandleren i portalen under *Tidligere bestillinger* — API-ordrer lander dér automatisk.
+
+---
+
+# Hent sortiment — `GET api_varer.php`
+
+Samme API-nøgle, men med GET (ingen body). Returnerer forhandlerens **aktuelle
+sortiment** — præcis de varer Kaffeværkstedet har tildelt kontoen — med de
+valgbare enheder og varianter:
+
+```json
+{
+    "success": true,
+    "genereret": "2026-10-15T12:00:00+02:00",
+    "antal_varer": 2,
+    "varer": [
+        {
+            "varenr": "1103",
+            "navn": "Brasilien",
+            "gtin": "5701234567890",
+            "basis_enhed": "KG",
+            "enheder": [
+                {"kode": "KG", "vejl_pris": 129.0},
+                {"kode": "225G", "vejl_pris": 38.7},
+                {"kode": "500G", "vejl_pris": 64.6}
+            ],
+            "varianter": [
+                {"kode": "EM", "betegnelse": "Malet til Espresso"},
+                {"kode": "FM", "betegnelse": "Malet til Filter"},
+                {"kode": "HB", "betegnelse": "Hele Bønner"},
+                {"kode": "SM", "betegnelse": "Malet til Stempel"}
+            ]
+        }
+    ]
+}
+```
+
+- `varenr` er **stabil og entydig** — brug den som nøglen i jeres produktkartotek.
+- `gtin` (EAN) medtages kun hvor Kaffeværkstedet har udfyldt den i BC.
+- `vejl_pris` er vejledende excl. moms — den endelige pris beregnes pr. ordre og
+  returneres i svaret fra `api_ordre.php`.
+- En vare uden `enheder` ud over basisenheden bestilles uden `enhed`-felt; uden
+  `varianter` bestilles uden `variant`-felt.
+
+## Anbefalet synkronisering (så systemerne altid taler samme sprog)
+
+1. **Hent sortimentet jævnligt** (fx natligt eller hver 6. time) og gem det lokalt.
+2. **Match på `varenr`**: nye numre i listen = nye produkter I kan sælge → opret
+   dem i jeres shop (evt. med manuel godkendelse først). Numre der forsvinder =
+   udgået hos Kaffeværkstedet → deaktivér produktet.
+3. **Bestil altid med `varenr` + evt. `variant`/`enhed`-koder præcis som de står
+   i sortimentet.** Ordre-API'et validerer altid mod det aktuelle sortiment:
+   et forkert/udgået/utildelt nummer afvises med HTTP 400 og en tydelig fejl —
+   der kan aldrig opstå en ordre på et nummer Kaffeværkstedet ikke forstår.
+4. **Undgå dobbeltordrer**: send altid jeres ordrenummer i `ordrenr_ekstern`.
+   Gentagne kald (fx ved netværksfejl) med samme nummer afvises med HTTP 409 og
+   den eksisterende faktura — kast ikke en fejl til jeres kunde i det tilfælde.
+5. Reager på **401** ved at stoppe ordreafsendelse og kontakte Kaffeværkstedet
+   (nøglen er fornylig udskiftet eller fjernet).
