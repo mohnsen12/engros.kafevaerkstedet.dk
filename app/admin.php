@@ -13,6 +13,7 @@ require_admin();
 
 $fejl_besked = '';
 $succes_besked = '';
+$api_noegle_vist = '';
 
 // Behandl handlinger
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -148,6 +149,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $succes_besked = "Kodeordet for '$username' blev nulstillet. Udlever det nye kodeord til forhandleren.";
             }
         }
+        // ─── Handling: GENERÉR API-NØGLE ──────────────────────────────────────
+        elseif ($action === 'generer_api_noegle') {
+            $bruger_id = intval($_POST['bruger_id'] ?? 0);
+            $stmt = $db->prepare("SELECT brugernavn FROM brugere WHERE id = :id");
+            $stmt->execute([':id' => $bruger_id]);
+            $username = $stmt->fetchColumn();
+
+            if (!$username) {
+                $fejl_besked = 'Brugeren blev ikke fundet.';
+            } elseif ($username === 'admin') {
+                $fejl_besked = 'Administrator-kontoen kan ikke få API-adgang.';
+            } else {
+                $noegle = bin2hex(random_bytes(32)); // 64 hex-tegn — vises kun denne ene gang
+                $update = $db->prepare("UPDATE brugere SET api_key_hash = :hash, api_noegle_oprettet = CURRENT_TIMESTAMP WHERE id = :id");
+                $update->execute([':hash' => password_hash($noegle, PASSWORD_BCRYPT), ':id' => $bruger_id]);
+                $api_noegle_vist = $noegle;
+                $succes_besked = "API-nøgle genereret for '$username'. Kopiér den NEDENFOR med det samme — den vises aldrig igen.";
+            }
+        }
+        // ─── Handling: FJERN API-NØGLE ────────────────────────────────────────
+        elseif ($action === 'fjern_api_noegle') {
+            $bruger_id = intval($_POST['bruger_id'] ?? 0);
+            $stmt = $db->prepare("SELECT brugernavn FROM brugere WHERE id = :id");
+            $stmt->execute([':id' => $bruger_id]);
+            $username = $stmt->fetchColumn();
+
+            if (!$username) {
+                $fejl_besked = 'Brugeren blev ikke fundet.';
+            } else {
+                $update = $db->prepare("UPDATE brugere SET api_key_hash = '', api_noegle_oprettet = NULL WHERE id = :id");
+                $update->execute([':id' => $bruger_id]);
+                $succes_besked = "API-adgangen for '$username' er lukket — forhandlerens system kan ikke længere sende ordrer.";
+            }
+        }
         // ─── Handling: REDIGER FORHANDLER ────────────────────────────────────
         elseif ($action === 'rediger_bruger') {
             $bruger_id   = intval($_POST['bruger_id'] ?? 0);
@@ -254,6 +289,26 @@ if ($rediger_id > 0) {
             <div class="alert alert-success animate-fade-in">
                 <span>✅</span>
                 <div><?php echo htmlspecialchars($succes_besked); ?></div>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($api_noegle_vist !== ''): ?>
+            <div class="card animate-fade-in" style="padding: 20px; border-color: var(--primary); margin-bottom: 20px;">
+                <h3 class="card-title" style="margin-bottom: 10px;">🤖 API-nøgle — kopiér nu</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 10px;">
+                    Nøglen lagres kun krypteret og kan <strong>ikke</strong> vises igen. Mistes den, genereres blot en ny.
+                </p>
+                <div style="font-family: monospace; font-size: 15px; background: var(--bg-muted); padding: 12px; border-radius: var(--radius-sm); word-break: break-all; user-select: all;">
+                    <?php echo htmlspecialchars($api_noegle_vist); ?>
+                </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 10px;">
+                    Forhandlerens system kalder:<br>
+                    <code style="font-family: monospace;"><?php
+                        echo htmlspecialchars(((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http')
+                            . '://' . ($_SERVER['HTTP_HOST'] ?? 'portal-domaene') . '/api_ordre.php');
+                    ?></code><br>
+                    med headeren <code>X-Api-Key: &lt;nøglen ovenfor&gt;</code> — fuld dokumentation findes i docs/API_ORDRE.md.
+                </p>
             </div>
         <?php endif; ?>
 
@@ -391,6 +446,9 @@ if ($rediger_id > 0) {
                                             <?php else: ?>
                                                 <span class="badge badge-danger">Deaktiveret</span>
                                             <?php endif; ?>
+                                            <?php if (($b['api_key_hash'] ?? '') !== ''): ?>
+                                                <span class="badge badge-info" style="margin-left: 4px;" title="Forhandleren kan sende ordrer via API">🤖 API</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td style="text-align: right;">
                                             <?php if ($b['brugernavn'] !== 'admin'): ?>
@@ -416,6 +474,25 @@ if ($rediger_id > 0) {
                                                         <input type="hidden" name="ny_kode" value="">
                                                         <button type="submit" class="action-icon-btn" title="Nulstil kodeord">🔑</button>
                                                     </form>
+
+                                                    <!-- API-nøgle: generér / genskab -->
+                                                    <form action="admin.php" method="POST" style="display:inline;"
+                                                          onsubmit="<?php echo ($b['api_key_hash'] ?? '') !== '' ? "return confirm('Der findes allerede en API-nøgle.\\nOK = generér en ny (den gamle holder op med at virke med det samme).');" : 'return true;'; ?>">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
+                                                        <input type="hidden" name="action" value="generer_api_noegle">
+                                                        <input type="hidden" name="bruger_id" value="<?php echo $b['id']; ?>">
+                                                        <button type="submit" class="action-icon-btn" title="API-adgang: generér / genskab nøgle">🤖</button>
+                                                    </form>
+
+                                                    <?php if (($b['api_key_hash'] ?? '') !== ''): ?>
+                                                    <!-- API-nøgle: fjern (luk adgangen) -->
+                                                    <form action="admin.php" method="POST" style="display:inline;" onsubmit="return confirm('Luk forhandlerens API-adgang? Hans system kan derefter ikke sende ordrer.');">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(get_csrf_token()); ?>">
+                                                        <input type="hidden" name="action" value="fjern_api_noegle">
+                                                        <input type="hidden" name="bruger_id" value="<?php echo $b['id']; ?>">
+                                                        <button type="submit" class="action-icon-btn danger-hover" title="Luk API-adgang (fjern nøglen)">🚫</button>
+                                                    </form>
+                                                    <?php endif; ?>
 
                                                     <!-- Slet bruger form -->
                                                     <form action="admin.php" method="POST" style="display:inline;" onsubmit="return confirm('Er du sikker på, at du vil slette brugeren \'<?php echo htmlspecialchars($b['brugernavn']); ?>\' permanent?');">

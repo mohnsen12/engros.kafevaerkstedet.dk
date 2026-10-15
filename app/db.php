@@ -57,6 +57,19 @@ try {
         // Kolonnen findes allerede — ignorer
     }
 
+    // 2c. Auto-migrering: ordre-API pr. forhandler. api_key_hash er TOM = ingen API-adgang;
+    //     nøglen lagres hashet (password_hash) — den rå nøgle vises kun én gang ved generering.
+    try {
+        $db->exec("ALTER TABLE brugere ADD COLUMN api_key_hash TEXT DEFAULT ''");
+    } catch (PDOException $e) {}
+    try {
+        $db->exec("ALTER TABLE brugere ADD COLUMN api_noegle_oprettet DATETIME DEFAULT NULL");
+    } catch (PDOException $e) {}
+    // ordrenr_ekstern: partnerens eget ordrenummer ved API-ordrer (idempotens: afvis dobbelt).
+    try {
+        $db->exec("ALTER TABLE ordre_log ADD COLUMN ordrenr_ekstern TEXT DEFAULT ''");
+    } catch (PDOException $e) {}
+
     // 3. Login-forsøg (Brute-force beskyttelse)
     $db->exec("CREATE TABLE IF NOT EXISTS login_forsog (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
